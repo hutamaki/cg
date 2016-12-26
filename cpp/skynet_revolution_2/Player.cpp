@@ -142,7 +142,9 @@
             int levelCounter(1); // SI != output 
 
             std::cerr << "BFS: " << SI << " output: " << output << std::endl;
-            // we start at output (first element)            
+            
+            std::vector<int>& adjacencies(maze[output]);
+
             stack->emplace_back(output);
             while (!stack->empty())
             {            
