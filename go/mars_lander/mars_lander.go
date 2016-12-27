@@ -38,14 +38,14 @@ func isOnSegment(p Point, a Point, b Point) bool {
 		p.y >= min(a.y, b.y) && p.y <= max(a.y, b.y) {
 		return true
 	} else {
-		return false;
+		return false
 	}
 }
 
 func slope(a Point, b Point) int {
 	if diff := b.y - a.y; diff != 0 {
 		if diff2 := b.x - a.x; diff2 != 0 {
-			return diff / diff2;
+			return diff / diff2
 		}
 	}
 	return 0
@@ -120,8 +120,12 @@ func collisions(surface []Point, nb int, landing Point, position Point) int {
 	return nbCollisions
 }
 
+func angle(vspeed float64, power float64) float64 {
+	return math.Acos(float64(vspeed / power)) * 180 / math.Pi
+}
+
 func main() {
-	var surfaceN int
+	/*var surfaceN int
 	fmt.Scan(&surfaceN)
 
 	var highest_point int = 0
@@ -151,7 +155,7 @@ func main() {
 	/*    if position.y < highest_y { // landing
 		//rotate_angle := d_hspeed
 	    }*/
-	var okcaptain = false
+	/*var okcaptain = false
 	var angle = 0
 	var speed = 3
 
@@ -184,7 +188,9 @@ func main() {
 		}
 		fmt.Fprintf(os.Stdout,"%d %d\n", angle, speed)
 		//fmt.Fprintf(os.Stdout,"-45 4\n")
-	}
+	}*/
+
+	fmt.Fprintf(os.Stdout, "%d", angle(3.71,4));
 }
 
 /*
