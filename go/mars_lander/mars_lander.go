@@ -98,17 +98,6 @@ func landingZone(surface []Point, nb int) int {
 	return -1
 }
 
-func computeAngle(landing Point, position Point) int {
-	dist_to_land_y := float64(position.y - landing.y)
-	dist_to_land_x := float64(position.x - landing.x)
-	fmt.Fprintf(os.Stderr,"dist to land> (%d, %d)\n", dist_to_land_x, dist_to_land_y)
-	tan_b := float64(dist_to_land_x / dist_to_land_y)
-	angle := int(math.Floor(math.Atan(tan_b) * 180 / math.Pi))
-	fmt.Fprintf(os.Stderr, "%d\n", angle)
-	return angle
-}
-
-
 // compute nb collisions
 func collisions(surface []Point, nb int, landing Point, position Point) int {
 	nbCollisions := 0
@@ -121,13 +110,21 @@ func collisions(surface []Point, nb int, landing Point, position Point) int {
 }
 
 func angle(vspeed float64, power float64) float64 {
-	return math.Acos(float64(vspeed / power)) * 180 / math.Pi
+	return math.Acos(float64(power / vspeed)) * 180 / math.Pi
+}
+
+type Ship struct {
+	r float64
+	throttle int
+	pos Point
 }
 
 func main() {
-	/*var surfaceN int
+	// read bn segemnts of surface
+	var surfaceN int
 	fmt.Scan(&surfaceN)
 
+	// constructs the map of the world & get the highest peak
 	var highest_point int = 0
 	mars_surface := make([]Point, surfaceN)
 	for i := 0; i < surfaceN; i++ {
@@ -138,11 +135,12 @@ func main() {
 		}
 	}
 
+	// get the landing zone index
 	idx := landingZone(mars_surface, surfaceN)
-	fmt.Fprintf(os.Stderr, "%d> (%d, %d) (%d, %d)\n",
-		idx, mars_surface[idx - 1].x, mars_surface[idx - 1].y, mars_surface[idx].x, mars_surface[idx].y)
-	fmt.Fprintf(os.Stderr, "> highest_y: %d", highest_point)
+	fmt.Fprintf(os.Stderr, "landing zone: index=%d> coords=(%d, %d) (%d, %d)\n", idx, mars_surface[idx - 1].x, mars_surface[idx - 1].y, mars_surface[idx].x, mars_surface[idx].y)
+	fmt.Fprintf(os.Stderr, "peak: %d", highest_point)
 
+	// compute landing point ie middle of landing zone
 	var landing Point
 	landing.x = (mars_surface[idx].x + mars_surface[idx - 1].x) / 2
 	landing.y = mars_surface[idx].y
@@ -155,26 +153,77 @@ func main() {
 	/*    if position.y < highest_y { // landing
 		//rotate_angle := d_hspeed
 	    }*/
-	/*var okcaptain = false
-	var angle = 0
-	var speed = 3
-
+	//var okCaptain = false
+	firstPhase := true
 	for {
-		var position Point
+		// read game informations
+		var ship Ship
 		var hspeed, vspeed, fuel, rotate, power int
-		fmt.Scan(&position.x, &position.y, &hspeed, &vspeed, &fuel, &rotate, &power)
+		fmt.Scan(&ship.pos.x, &ship.pos.y, &hspeed, &vspeed, &fuel, &rotate, &power)
 
-		nbCollisions := collisions(mars_surface, surfaceN, landing, position)
+		nbCollisions := collisions(mars_surface, surfaceN, landing, ship.pos)
 		fmt.Fprintf(os.Stderr, "collisions> %d\n", nbCollisions)
+		if nbCollisions > 1 {
+			// we need to do something later
+			// basically the idea is to rotate & move slowly to the direction of landing zone
+			// until nbCollisions == 1
+		}
 
-		if !okcaptain {
+		dx := landing.x - ship.pos.x
+
+		if firstPhase && hspeed <= 40 {
+			ship.throttle = 4
+			ship.r = -45
+
+			if dx == 0 {
+				ship.r = 0
+			}
+
+		} else {
+			firstPhase = false
+
+			fmt.Fprintf(os.Stderr, "first phase finished!\n")
+			// MRUA
+			//  v^2 = v0^2 + 2 * a (x - x0)
+			// http://www.physics.ohio-state.edu/~dws/class/131/lecture_recap.pdf
+			// => a = (v^2 - v0^2) / 2 * (x - x0)
+
+			// compute x
+			speedy := hspeed * hspeed
+			fmt.Fprintf(os.Stderr, "speedy= %d\n", speedy)
+			twodx := 2 * dx
+			fmt.Fprintf(os.Stderr, "twodx= %d\n", twodx)
+			fmt.Fprintf(os.Stderr, "res= %d\n",  - (speedy) / twodx)
+
+
+			ship.throttle = - (hspeed * hspeed) / (2 * dx)
+			//ship.r = -math.Min(angle(float64(vspeed), float64(ship.throttle)), 45.0)
+			ship.r = -angle(float64(vspeed), float64(ship.throttle))
+
+			if ship.throttle < 0 {
+				ship.throttle = - ship.throttle
+				ship.r = -ship.r
+			}
+
+		}
+		fmt.Fprintf(os.Stderr, "satellite position= (%d, %d)\n", ship.pos.x, ship.pos.y)
+		fmt.Fprintf(os.Stderr, "landing position= (%d, %d)\n", landing.x, landing.y)
+		fmt.Fprintf(os.Stderr, "dx= %d\n", dx)
+		fmt.Fprintf(os.Stderr, "hspeed= %d\n", hspeed)
+		fmt.Fprintf(os.Stderr, "ship.throttle= %d\n", ship.throttle)
+		fmt.Fprintf(os.Stderr, "ship.r= %d\n", int(ship.r))
+
+
+
+
+		/*if !okCaptain {
 			if abs(position.x - landing.x) < 1700 {
 				angle = 0
 				speed = 0
-				okcaptain = true
+				okCaptain = true
 				fmt.Fprintf(os.Stderr, "okcaptain !")
 			} else {
-				angle = computeAngle(landing, position)
+
 			}
 		}
 
@@ -186,9 +235,9 @@ func main() {
 				speed = 0
 			}
 		}
-		fmt.Fprintf(os.Stdout,"%d %d\n", angle, speed)
-		//fmt.Fprintf(os.Stdout,"-45 4\n")
-	}*/
+		fmt.Fprintf(os.Stdout,"%d %d\n", angle, speed)*/
+		fmt.Fprintf(os.Stdout,"%d %d\n", int(ship.r), ship.throttle)
+	}
 
 	fmt.Fprintf(os.Stdout, "%d", angle(3.71,4));
 }
