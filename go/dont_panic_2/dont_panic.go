@@ -77,8 +77,15 @@ func ComputeMoves(leny Lemming) []Move {
 		// first we try to know where are next level elevators
 		nextFloorElevators := elevators[leny.cloneFloor + 1]
 		if len(nextFloorElevators) == 0 {
-			fmt.Fprintln(os.Stdout, "ça va pas être possible messieurs") // we could do something recursive, but not necessary now
-			return nil
+
+			// maybe is it the exit floor, if it's the case, just fake an nextFloorElevator (smells like a bam):
+			if leny.cloneFloor+1 == exitFloor {
+				nextFloorElevators = append(nextFloorElevators, exitPos)
+			} else {
+
+				fmt.Fprintln(os.Stdout, "ça va pas être possible messieurs") // we could do something recursive, but not necessary now
+				return nil
+			}
 		}
 
 		// ok we try to generate moves by generating elevators just below those of next level (could be a bad idea)(or not)
@@ -98,7 +105,7 @@ func ComputeMoves(leny Lemming) []Move {
 			} else {
 				if elevator > leny.clonePos {	// elevator @ right
 					wait := Move{"WAIT", elevator - leny.clonePos, nil}
-					wait.nextMoves = append(wait.nextMoves, wait)
+					wait.nextMoves = append(wait.nextMoves, elevator_command)
 					if leny.direction == "LEFT" {		// if we go left, we need to block first
 						block := Move{"BLOCK", 0, nil}
 						block.nextMoves = append(block.nextMoves, wait)
@@ -124,7 +131,27 @@ func main() {
 	// nbTotalClones: number of generated clones
 	// nbAdditionalElevators: number of additional elevators that you can build
 	// nbElevators: number of elevators
-	fmt.Scan(&nbFloors, &width, &nbRounds, &exitFloor, &exitPos, &nbTotalClones, &nbAdditionalElevators, &nbElevators)
+
+	nbFloors= 2
+	width= 13
+	exitFloor= 1
+	exitPos= 11
+	nbTotalClones= 10
+	nbAdditionalElevators= 1
+	nbElevators= 0
+	lemming.cloneFloor = 0
+	lemming.clonePos= 2
+	lemming.direction="RIGHT"
+	/*nb possible moves for next level= 1*/
+
+	//fmt.Scan(&nbFloors, &width, &nbRounds, &exitFloor, &exitPos, &nbTotalClones, &nbAdditionalElevators, &nbElevators)
+
+	fmt.Fprintf(os.Stderr,"nbFloors= %d\n", nbFloors)
+	fmt.Fprintf(os.Stderr,"width= %d\n", width)
+	fmt.Fprintf(os.Stderr,"exitFloor= %d, exitPos= %d\n", exitFloor, exitPos)
+	fmt.Fprintf(os.Stderr,"nbTotalClones= %d\n", nbTotalClones)
+	fmt.Fprintf(os.Stderr,"nbAdditionalElevators= %d\n", nbAdditionalElevators)
+	fmt.Fprintf(os.Stderr,"nbElevators= %d\n", nbElevators)
 
 	// store elevators, to that elevators[i] contains the position of all elevators
 	for i := 0; i < nbElevators; i++ {
@@ -138,11 +165,11 @@ func main() {
 		// cloneFloor: floor of the leading clone
 		// clonePos: position of the leading clone on its floor
 		// direction: direction of the leading clone: LEFT or RIGHT
-		fmt.Scan(&lemming.cloneFloor, &lemming.clonePos, &lemming.direction)
-		fmt.Fprintf(os.Stderr, "cloneFloor= %d, clonePos= %d, direction=%s", lemming.cloneFloor, lemming.clonePos, lemming.direction)
+		//fmt.Scan(&lemming.cloneFloor, &lemming.clonePos, &lemming.direction)
+		fmt.Fprintf(os.Stderr, "cloneFloor= %d, clonePos= %d, direction= %s\n", lemming.cloneFloor, lemming.clonePos, lemming.direction)
 
 		moves := ComputeMoves(lemming)
-		fmt.Println("nb possible moves for next level= %d", len(moves))
+		fmt.Fprintf(os.Stderr,"nb possible moves for next level= %d\n", len(moves))
 
 		fmt.Println("WAIT") // action: WAIT or BLOCK
 	}
