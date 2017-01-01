@@ -5,9 +5,38 @@ import (
 	"os"
 )
 
+func abs(a int) int {
+	if a <= 0 {
+		return -a
+	} else {
+		return a
+	}
+}
+
+type Direction int
+const (
+	LEFT Direction = iota
+	RIGHT Direction = iota
+)
+
+func opposite(direction Direction) Direction {
+	if direction == LEFT {
+		return RIGHT
+	} else {
+		return LEFT
+	}
+}
+
+type Action int
+const (
+	WAIT Action =  iota
+	ELEVATOR Action = iota
+	BLOCK Action = iota
+)
+
 type Lemming struct {
 	cloneFloor, clonePos int
-	direction string
+	direction Direction
 }
 
 var (
@@ -17,13 +46,91 @@ var (
 )
 
 type Move struct {
-	action string // action could be ELEVATOR, WAIT, BLOCK
-	togo int // x pos to goto, only if WAIT
-	nextMoves []*Move
+	action Action // action could be ELEVATOR, WAIT, BLOCK
+	cost int // x pos to goto, only if WAIT, cost of the function otherwise
+	nextMoves []*Move // possible moves after that
+	Lemming // new position & floor after move
 }
 
-func NewMove(action string, togo int, nextMove *Move) *Move {
-	return &Move{action, togo, []*Move{nextMove}}
+func NewMove(action Action, togo int, lemming Lemming) *Move {
+	var cost, pos, floor int
+	var direction Direction
+	switch action {
+		case WAIT : {
+			cost = togo
+			pos += lemming.clonePos
+			floor = lemming.cloneFloor
+		}
+		case BLOCK : {
+			cost = 3
+			pos = lemming.clonePos
+			floor = lemming.cloneFloor
+			direction = opposite(lemming.direction)
+		}
+		case ELEVATOR : {
+			cost = 1
+			pos = lemming.clonePos
+			floor = lemming.cloneFloor
+		}
+	}
+	return &Move{action: action, cost: cost, Lemming:Lemming{floor, pos, direction}}
+}
+
+func ManhattanDistance(floor, pos int) int { // means h in A*, distance to goal (here the exit)
+	return abs(exitFloor - pos) + abs(exitPos - floor)
+}
+
+
+/*func CostFunction(g int, move *Move) int { // means g in A*, the cost of the way to go here
+	cost := g
+	for ptr := move; move.nextMoves == nil;  {
+		switch  {
+		case move.nextMoves == nil: continue
+		case len(move.nextMoves) > 1: fmt.Println("IMPOSSIBRU ! it's not a newly computed path !")
+		}
+	}
+}
+
+func Astar() {
+
+}*/
+
+func CreateElevator(lemming Lemming) *Move {
+	elevator := NewMove(ELEVATOR, 0, lemming)
+	wait := NewMove(WAIT, 3, elevator.Lemming)
+	elevator.nextMoves = append(elevator.nextMoves, wait)
+	return elevator
+}
+
+func debugTrace(move *Move) {
+	count := move.cost
+	ptr := move
+	for i := 0; ptr != nil; i++ {
+		switch ptr.action {
+		case ELEVATOR:
+			fmt.Fprintf(os.Stdout, "%d> ELEVATOR\n", i)
+		case BLOCK:
+			fmt.Fprintf(os.Stdout, "%d> BLOCK\n", i)
+		case WAIT:
+			{
+				if count > 0 {
+					fmt.Fprintf(os.Stdout, "%d> WAIT\n", i)
+					count --
+				}
+			}
+		}
+
+		if ptr.action == WAIT && count > 0 {
+			continue
+		}
+
+		if ptr.nextMoves != nil {
+			ptr = ptr.nextMoves[0]
+			count = ptr.cost // do not inverse lines !
+		} else {
+			ptr = nil
+		}
+	}
 }
 
 func ComputeMoves(leny Lemming) []*Move {
@@ -48,22 +155,26 @@ func ComputeMoves(leny Lemming) []*Move {
 		}
 
 		if left_elevator != -1 { // we have the nearest elevator @left
-			wait := NewMove("WAIT", leny.clonePos - left_elevator, nil)
-			if leny.direction == "RIGHT" { // need to block first
-				block := NewMove("BLOCK", 0, wait)
-				nextMoves = append(nextMoves, block)
+			var p *Move
+			if leny.direction == RIGHT { // need to block first
+				block := NewMove(BLOCK, 0, leny)
+				wait := NewMove(WAIT, leny.clonePos - left_elevator, block.Lemming) // compute wait position using block one
+				p.nextMoves = append(p.nextMoves, wait) // do linkage block -> wait
 			} else {
-				nextMoves = append(nextMoves, wait)
+				p = NewMove(WAIT, leny.clonePos - left_elevator, leny)
 			}
+			nextMoves = append(nextMoves, p)
 		}
 		if right_elevator != width { // we have the nearest elevator @left
-			wait := NewMove("WAIT", right_elevator - leny.clonePos, nil)
-			if leny.direction == "LEFT" { // need to block
-				block := NewMove("BLOCK", 0, wait)
-				nextMoves = append(nextMoves, block)
+			var p *Move
+			if leny.direction == RIGHT { // need to block
+				p = NewMove(BLOCK, 0, leny)
+				wait := NewMove(WAIT, right_elevator - leny.clonePos, p.Lemming)
+				p.nextMoves = append(p.nextMoves, wait)
 			} else {
-				nextMoves = append(nextMoves, wait)
+				p = NewMove(WAIT, right_elevator - leny.clonePos, leny)
 			}
+			nextMoves = append(nextMoves, p)
 		}
 	} else { // we do not get elevators, we need to try to figure out where to put'em
 
@@ -89,29 +200,36 @@ func ComputeMoves(leny Lemming) []*Move {
 		// ok we try to generate moves by generating elevators just below those of next level (could be a bad idea)(or not)
 		// at this time we can not know where we need to go, to we bourinely generate a move for all
 		for _, elevator := range nextFloorElevators {
-			elevator_command := NewMove("ELEVATOR", 0, NewMove("WAIT", 3, nil))
-			if elevator < leny.clonePos {		// elevator @left
-				wait := NewMove("WAIT", leny.clonePos - elevator, elevator_command)
-				if leny.direction == "RIGHT" {		// if we go right, we need to block first
-					block := NewMove("BLOCK", 0, wait)
+			if elevator < leny.clonePos { // elevator @left
+
+				var p *Move
+				if leny.direction == RIGHT { // if we go right, we need to block first
+					block := NewMove(BLOCK, 0, leny)
 					nextMoves = append(nextMoves, block)
+					p = NewMove(WAIT, leny.clonePos-elevator, block.Lemming)
 				} else {
-					nextMoves = append(nextMoves, wait) // otherwise, just add wait + elevator command
+					p = NewMove(WAIT, leny.clonePos-elevator, leny) // otherwise, just add wait + elevator command
+					nextMoves = append(nextMoves, p)
 				}
+				p.nextMoves = append(p.nextMoves, CreateElevator(p.Lemming))
 			} else {
-				if elevator > leny.clonePos {	// elevator @ right
-					wait := NewMove("WAIT", elevator - leny.clonePos, elevator_command)
-					if leny.direction == "LEFT" {		// if we go left, we need to block first
-						block := NewMove("BLOCK", 0, wait)
+				if elevator > leny.clonePos { // elevator @ right
+					var p *Move
+					if leny.direction == LEFT { // if we go left, we need to block first
+						block := NewMove(BLOCK, 0, leny)
 						nextMoves = append(nextMoves, block)
+						p = NewMove(WAIT, elevator-leny.clonePos, block.Lemming)
 					} else {
-						nextMoves = append(nextMoves, wait)	// otherwise, just wait + elevator command
+						p = NewMove(WAIT, elevator-leny.clonePos, leny) // otherwise, just wait + elevator command
+						nextMoves = append(nextMoves, p)
 					}
+					p.nextMoves = append(p.nextMoves, CreateElevator(p.Lemming))
 				} else {
-					nextMoves = append(nextMoves, elevator_command) // we are just below, only put elevator command
+					nextMoves = append(nextMoves, CreateElevator(leny)) // we are just below, only put elevator command
 				}
 			}
 		}
+
 	}
 	return nextMoves
 }
@@ -135,7 +253,7 @@ func main() {
 	nbElevators= 0
 	lemming.cloneFloor = 0
 	lemming.clonePos= 2
-	lemming.direction="RIGHT"
+	lemming.direction=RIGHT
 	/*nb possible moves for next level= 1*/
 
 	//fmt.Scan(&nbFloors, &width, &nbRounds, &exitFloor, &exitPos, &nbTotalClones, &nbAdditionalElevators, &nbElevators)
@@ -155,7 +273,7 @@ func main() {
 		fmt.Scan(&elevatorFloor, &elevatorPos)
 		elevators[elevatorFloor] = append(elevators[elevatorFloor], elevatorPos)
 	}
-	for {
+	//for {
 		// cloneFloor: floor of the leading clone
 		// clonePos: position of the leading clone on its floor
 		// direction: direction of the leading clone: LEFT or RIGHT
@@ -164,7 +282,9 @@ func main() {
 
 		moves := ComputeMoves(lemming)
 		fmt.Fprintf(os.Stderr,"nb possible moves for next level= %d\n", len(moves))
+		debugTrace(moves[0])
+	//}
 
-		fmt.Println("WAIT") // action: WAIT or BLOCK
-	}
+
+		/*fmt.Println("WAIT") // action: WAIT or BLOCK**/
 }
