@@ -76,7 +76,7 @@ public class Player {
                 System.out.println(currentLevel + " " + back_idx);
 
                 ArrayList current = maze[currentLevel];
-                current.remove(current.indexOf(back_idx));
+     a           current.remove(current.indexOf(back_idx));
 
                 ArrayList mirror = maze[back_idx];
                 mirror.remove(mirror.indexOf(currentLevel));
