@@ -21,22 +21,28 @@ public class Solution {
 	 * incremental build of string representation of numbers in dico)
 	 */
 	public void readAndBuildDictionary(Scanner in) {
+		
 		StringBuffer[] strBuf = new StringBuffer[nbNumbers];
 		StringBuffer[] strBufReversed = new StringBuffer[nbNumbers];
+		for (int i = 0; i < nbNumbers; i++) {
+			strBuf[i] = new StringBuffer();
+			strBufReversed[i] = new StringBuffer();			
+		}
 		for (int i = 0; i < H; i++) {
 			String numeral = in.next();
 			for (int j = 0; j < nbNumbers; j++) {
-
-				String partNumber = numeral.substring(j, j + L);
-				strBuf[i].append(partNumber);
-				strBufReversed[i].append(partNumber + "\n");			
+				String partNumber = numeral.substring(j * L, (j * L) + L);
+				System.err.println("partNumber: " + partNumber);
+				strBuf[j].append(partNumber);
+				strBufReversed[j].append(partNumber + "\n");			
 			}
 		}
 		// build dictionaries
 		for (int i = 0; i < nbNumbers; i++) {
 			String str = strBuf[i].toString();
+			System.err.println(i + " > " + str);
 			dico.put(strBuf[i].toString(), i);
-			reverse.put(i, str);
+			reverse.put(i, strBufReversed[i].toString());
 		}
 	}
 
@@ -49,7 +55,8 @@ public class Solution {
 		for (int i = 0; i < S; i++) {
 			sbf.append(in.next());
 		}
-		return dico.get(sbf);
+		System.err.println("sbf " + sbf.toString());
+		return dico.get(sbf.toString());
 	}
 
 	/*
@@ -77,7 +84,10 @@ public class Solution {
 	public String perform(Scanner in) throws Exception {
 		int firstNumber = readNumber(in);
 		int secondNumber = readNumber(in);
+		System.err.println("firstNumber : " + firstNumber);
+		System.err.println("secondNumber: " + secondNumber);
 		int result = getResult(in, firstNumber, secondNumber);
+		System.err.println("result: " + result);
 		return display(Integer.toString(result));
 	}
 	
@@ -86,7 +96,7 @@ public class Solution {
 		StringBuffer strBuf = new StringBuffer();
 		for (int i = 0; i < result.length(); i++) {
 			int c = Character.getNumericValue(result.charAt(i));
-			strBuf.append(reverse.get(c) + "\n");			
+			strBuf.append(reverse.get(c));			
 		}
 		return strBuf.toString();
 	}
