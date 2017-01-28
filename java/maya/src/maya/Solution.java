@@ -88,16 +88,19 @@ public class Solution {
 		System.err.println("secondNumber: " + secondNumber);
 		int result = getResult(in, firstNumber, secondNumber);
 		System.err.println("result: " + result);
-		return display(Integer.toString(result));
+		StringBuffer strBuf = new StringBuffer();
+		return display(result, strBuf);
 	}
 	
 	/* return result in a displayable form */
-	private String display(String result) {
-		StringBuffer strBuf = new StringBuffer();
-		for (int i = 0; i < result.length(); i++) {
-			int c = Character.getNumericValue(result.charAt(i));
-			strBuf.append(reverse.get(c));			
-		}
+	private String display(int result, StringBuffer strBuf) {
+		if (result > nbNumbers) {
+			int mod = result % nbNumbers;
+			display(result / nbNumbers, strBuf);
+			strBuf.append(reverse.get(mod));
+		} else {
+			strBuf.append(reverse.get(result));	
+		}					
 		return strBuf.toString();
 	}
 
