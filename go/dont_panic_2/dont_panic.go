@@ -89,8 +89,15 @@ func ManhattanDistance(floor, pos int) int { // means h in A*, distance to goal 
 		case len(move.nextMoves) > 1: fmt.Println("IMPOSSIBRU ! it's not a newly computed path !")
 		}
 	}
-}
+}*/
 
+type Node struct {
+
+	g, h, f int
+	parent *Node
+	
+}
+/*
 func Astar() {
 
 }*/
