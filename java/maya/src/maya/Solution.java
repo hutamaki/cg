@@ -45,18 +45,30 @@ public class Solution {
 			reverse.put(i, strBufReversed[i].toString());
 		}
 	}
+	
+	/*
+	 * treat one char and return its value 
+	 */
+	private int readChar(Scanner in) {
+		StringBuffer sbf = new StringBuffer();
+		for (int i = 0; i < H; i++) {
+			sbf.append(in.next());
+		}
+		System.err.println("sbf " + sbf.toString());
+		return dico.get(sbf.toString());
+	}
 
 	/*
 	 * what we want is to treat only flat strings
 	 */
 	private int readNumber(Scanner in) {
-		int S = in.nextInt();
-		StringBuffer sbf = new StringBuffer();
-		for (int i = 0; i < S; i++) {
-			sbf.append(in.next());
+		int nb = in.nextInt() / H;		
+		int result = 0;
+		for (int i = 0; i < nb; i++) {
+			result *= 20;
+			result += readChar(in);
 		}
-		System.err.println("sbf " + sbf.toString());
-		return dico.get(sbf.toString());
+		return result;
 	}
 
 	/*
