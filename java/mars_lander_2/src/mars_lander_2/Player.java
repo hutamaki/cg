@@ -5,6 +5,13 @@ import java.util.Scanner;
 class Point	{
 	public int x;
 	public int y;
+	
+	public Point() {}
+	
+	public Point(int x, int y) {
+		this.x = x;
+		this.y = y;
+	}
 }
 
 class Ship 	{
@@ -13,7 +20,7 @@ class Ship 	{
 	Point pos;
 }
 
-public class Player {
+class Player {
 
 	private Point[] surface;
 	private int peak;
@@ -46,7 +53,7 @@ public class Player {
 	 * construct the landing point (ie middle of the landing zone)
 	 */
 	private void constructLandingPoint() throws Exception {
-		int indexOfLandingZone = landingZone(surface);
+		int indexOfLandingZone = landingZone();
 		landing = new Point();
 		landing.x = (surface[indexOfLandingZone].x + surface[indexOfLandingZone - 1].x) / 2;
 		landing.y = surface[indexOfLandingZone].y;
@@ -122,11 +129,11 @@ public class Player {
 	}
 	
 	/*
-	 * @param Array of (x,y) points representing the mars surface
+	 * Array of (x,y) points representing the mars surface
 	 * @throws Exception if no landing zone is detected
 	 * @return index of the landing zone 
 	 */
-	public int landingZone(Point[] surface) throws Exception {
+	public int landingZone() throws Exception {
 		for (int i = 1; i < surface.length; i++) {
 			if ((surface[i - 1].y - surface[i].y) == 0) {
 				return i;
@@ -136,10 +143,10 @@ public class Player {
 	}
 	
 	/*
-	 * @param Array of (x,y) points representing the mars surface
+	 * Array of (x,y) points representing the mars surface
 	 * @return nbCollisions = 1 if there is no obstacle between landing zone & position
 	 */
-	public int collisions(Point[] surface, Point landing, Point position) {
+	public int collisions(Point position) {
 		int nbCollisions = 0;
 		for (int i = 1; i < surface.length; i++) {
 			if (intersect(position, landing, surface[i - 1], surface[i])) {
@@ -159,17 +166,42 @@ public class Player {
 		return Math.acos(power / vspeed) * 180.0 * Math.PI;
 	}
 	
+	public static double MRUA(double x0, double v0, double x1, double v1) {
+		return (v1 * v1 - v0 * v0) / (2.0 * (x1 - x0));
+	}
+	
 	/*
-	 * @param X x-pos of the module
-	 * @param Y y-pos of the module
+	 * @param (x,y) position of the module
 	 * @param hSpeed the horizontal speed (in m/s), can be negative.
 	 * @param vSpeed the vertical speed (in m/s), can be negative.
 	 * @param fuel the quantity of remaining fuel in liters.
 	 * @param rotate the rotation angle in degrees (-90 to 90).
 	 * @param power the thrust power (0 to 4).
 	 */
-	public void land(int X, int Y, int hSpeed, int vSpeed, int fuel, int rotate, int power) {
-		System.err.println("20 3 ");
+	public void land(Point pos, int hSpeed, int vSpeed, int fuel, int rotate, int power) {
+		
+		int nbCollisions = collisions(pos);
+		System.err.println("collisions: " + nbCollisions);
+		
+		if (nbCollisions > 1) {
+			// we need to do something later
+			// basically the idea is to rotate & move slowly to the direction of landing zone
+			// until nbCollisions == 1
+		}
+		
+		
+		
+		// MRUA
+		//  v^2 = v0^2 + 2 * a (x - x0)
+		// http://www.physics.ohio-state.edu/~dws/class/131/lecture_recap.pdf
+		// => a = (v^2 - v0^2) / 2 * (x - x0)
+		
+		int throwtle = (int)MRUA(pos.x, vSpeed, landing.x, 0);
+		System.err.println("throwtle: " + throwtle);
+		
+		int r = (int) - angle(vSpeed, throwtle);
+		
+		System.out.println(r + " " + throwtle);
 	}
 
 	public static void main(String args[]) {
@@ -190,7 +222,7 @@ public class Player {
 			int rotate = in.nextInt(); 
 			int power = in.nextInt(); 
 			
-			p.land(X, Y, hSpeed, vSpeed, fuel, rotate, power);
+			p.land(new Point(X, Y), hSpeed, vSpeed, fuel, rotate, power);
 		}
 	}
 }
