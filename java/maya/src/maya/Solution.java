@@ -32,20 +32,17 @@ public class Solution {
 			String numeral = in.next();
 			for (int j = 0; j < nbNumbers; j++) {
 				String partNumber = numeral.substring(j * L, (j * L) + L);
-				System.err.println("partNumber: " + partNumber);
 				strBuf[j].append(partNumber);
 				strBufReversed[j].append(partNumber + "\n");			
 			}
 		}
 		// build dictionaries
 		for (int i = 0; i < nbNumbers; i++) {
-			String str = strBuf[i].toString();
-			System.err.println(i + " > " + str);
 			dico.put(strBuf[i].toString(), i);
 			reverse.put(i, strBufReversed[i].toString());
 		}
 	}
-	
+
 	/*
 	 * treat one char and return its value 
 	 */
@@ -54,16 +51,15 @@ public class Solution {
 		for (int i = 0; i < H; i++) {
 			sbf.append(in.next());
 		}
-		System.err.println("sbf " + sbf.toString());
 		return dico.get(sbf.toString());
 	}
 
 	/*
 	 * what we want is to treat only flat strings
 	 */
-	private int readNumber(Scanner in) {
+	private long readNumber(Scanner in) {
 		int nb = in.nextInt() / H;		
-		int result = 0;
+		long result = 0;
 		for (int i = 0; i < nb; i++) {
 			result *= 20;
 			result += readChar(in);
@@ -74,7 +70,7 @@ public class Solution {
 	/*
 	 * parse operation char & do the calculation
 	 */
-	private int getResult(Scanner in, int firstNumber, int secondNumber) throws Exception {
+	private long getResult(Scanner in, long firstNumber, long secondNumber) throws Exception {
 		String operation = in.next();
 		switch (operation.charAt(0)) {
 		case '+':
@@ -94,24 +90,21 @@ public class Solution {
 	 * in a displayable form.
 	 */
 	public String perform(Scanner in) throws Exception {
-		int firstNumber = readNumber(in);
-		int secondNumber = readNumber(in);
-		System.err.println("firstNumber : " + firstNumber);
-		System.err.println("secondNumber: " + secondNumber);
-		int result = getResult(in, firstNumber, secondNumber);
-		System.err.println("result: " + result);
+		long firstNumber = readNumber(in);
+		long secondNumber = readNumber(in);
+		long result = getResult(in, firstNumber, secondNumber);
 		StringBuffer strBuf = new StringBuffer();
 		return display(result, strBuf);
 	}
 	
 	/* return result in a displayable form */
-	private String display(int result, StringBuffer strBuf) {
+	private String display(long result, StringBuffer strBuf) {
 		if (result > nbNumbers) {
-			int mod = result % nbNumbers;
+			int mod = (int)(result % nbNumbers);
 			display(result / nbNumbers, strBuf);
 			strBuf.append(reverse.get(mod));
 		} else {
-			strBuf.append(reverse.get(result));	
+			strBuf.append(reverse.get((int)result));	
 		}					
 		return strBuf.toString();
 	}
