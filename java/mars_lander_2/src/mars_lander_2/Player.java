@@ -71,7 +71,7 @@ class Player {
 	 * @param b b coord of AB segment
 	 * @return true if p in on segment AB
 	 */
-	public boolean isOnSegment(Point p, Point a, Point b) {
+	public static boolean isOnSegment(Point p, Point a, Point b) {
 		return (p.x <= Math.max(a.x, b.x) && p.x >= Math.min(a.x, b.x) &&
 				p.y >= Math.min(a.y, b.y) && p.y <= Math.max(a.y, b.y));
 	}
@@ -82,7 +82,7 @@ class Player {
 	 * @param b b coord of AB segment
 	 * @return the slope of AB semgent or 0 if divideBy0
 	 */
-	public int slope(Point a, Point b) {
+	public static int slope(Point a, Point b) {
 		int diff = b.y - a.y;
 		if (diff != 0) {
 			int diff2 = b.x - a.x;
@@ -93,11 +93,11 @@ class Player {
 		return 0;
 	}
 	
-	public int orientation(Point a, Point b, Point p) {
+	public static int orientation(Point a, Point b, Point p) {
 		return slope(b, p) - slope(a, b);
 	}
 	
-	public boolean intersect(Point a, Point b, Point p, Point q) {
+	public static boolean intersect(Point a, Point b, Point p, Point q) {
 		int oa = orientation(a, b, p);
 		int ob = orientation(a, b, q);
 		
