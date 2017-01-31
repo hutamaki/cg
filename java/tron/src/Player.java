@@ -1,123 +1,117 @@
-import java.util.*;
-import java.io.*;
-import java.math.*;
+import java.util.Arrays;
+import java.util.Scanner;
+import java.util.Vector;
+
+class Maze {
+	public final static int WIDTH = 30;
+	public final static int HEIGHT = 20;
+	public final static int DEFAULT = -1;
+
+	private final int[] maze = new int[WIDTH * HEIGHT];
+
+	public Maze() {
+		Arrays.fill(maze, DEFAULT);
+	}
+
+	public boolean isFree(int coordinate) {
+		System.err.format("isFree>  %d | p=%d\n", coordinate, maze[coordinate]);
+		return maze[coordinate] == DEFAULT;
+	}
+
+	public void occupy(int x, int y, int p) {
+		occupy(y * WIDTH + x, p);
+	}
+
+	public void occupy(int coordinate, int p) {
+		maze[coordinate] = p;		
+		System.err.format("occupy: %d | p=%d\n", coordinate, maze[coordinate]);
+	}
+}
+
+class Move {
+
+	private final static String[] MOVES_STR = { "UP", "DOWN", "RIGHT", "LEFT" };
+
+	public int dx;
+	public int dy;
+	public int id;
+
+	public Move(int dx, int dy, int id) {
+		this.dx = dx;
+		this.dy = dy;
+		this.id = id;
+	}
+
+	public int toCoordinates(int x, int y) {
+		return (y + dy) * Maze.WIDTH + x + dx;
+	}
+
+	public boolean isInBounds(int x, int y) {
+		int real_x = x + dx;
+		if (real_x < 0 || real_x >= Maze.WIDTH) // left or right not possible
+			return false;
+		int real_y = y + dy;
+		if (real_y < 0 || real_y >= Maze.HEIGHT) // up or down not possible
+			return false;
+		return true;
+	}
+
+	public String toString() {
+		return MOVES_STR[id];
+	}
+}
 
 class Player {
-
-	private final static int WIDTH = 30;
-	private final static int HEIGHT = 20;
-	private final int[] maze = new int[WIDTH * HEIGHT];
-	private final static String[] MOVES_STR = { "UP", "DOWN", "RIGHT", "LEFT" };
 
 	private final static int UP = 0;
 	private final static int DOWN = 1;
 	private final static int RIGHT = 2;
 	private final static int LEFT = 3;
+	private final static Move[] MOVES = { new Move(0, -1, UP), new Move(0, 1, DOWN), new Move(1, 0, RIGHT),
+			new Move(-1, 0, LEFT) };
 
-	private final static int[][] MOVES = { { 0, -1 }, { 0, 1 }, { 1, 0 }, { -1, 0 } };
+	private Vector<Move> moves = new Vector<Move>();
+	private final Maze maze = new Maze();
 
-	private Vector<Integer> moves = new Vector<Integer>();
-
-	private int tomaze(int x, int y) {
-		return y * WIDTH + x;
-	}
-
-	public Player() {
-		Arrays.fill(maze, -1);
-	}
-
-	private void possibleMoves(Vector<Integer> race, int x, int y) {
+	private void possibleMoves(Vector<Move> race, int x, int y) {
 		race.clear();
 		for (int i = 0; i < MOVES.length; i++) {
-			int[] move = MOVES[i];
 
-			if (x == 0 && move[0] == -1)
-				continue; // left not possible
-			if (y == 0 && move[1] == -1)
-				continue; // up not possible
-			if (x == WIDTH - 1 && move[0] == 1)
-				continue; // right not possible
-			if (y == HEIGHT - 1 && move[1] == 1)
-				continue; // down not possible
+			Move move = MOVES[i];
+			if (!move.isInBounds(x, y)) // clipping: ignoring outside moves
+				continue;
 
-			if (maze[tomaze(x + move[0], y + move[1])] != -1)
-				continue; // place already taken.
+			if (!maze.isFree(move.toCoordinates(x, y))) // place already taken.
+				continue;
 
 			// legit move
-			race.add(i);
+			race.add(move);
 		}
 	}
 
-	public int getDX(int X, int Y, int from_move) {
+	public int getDXY(int X, int Y, Move move) {
 		int freeCount = 0;
-		int dx = MOVES[from_move][0]; // could be 1 or -1
-		while (X >= 0 && X < WIDTH && maze[tomaze(X, Y)] == -1) {
+		while (move.isInBounds(X, Y) && maze.isFree(move.toCoordinates(X, Y))) {
 			freeCount++;
-			X += dx;
-			System.err.format("getdx: X=%d, dx=%d\n", X, dx);
+			X += move.dx;
+			Y += move.dy;
 		}
+		System.err.format("getdxy: X=%d, Y=%d, dx=%d, dy=%d, freeCount=%d (move=%s)\n", X, Y, move.dx, move.dy, freeCount, move);
 		return freeCount;
 	}
 
-	public int getDY(int X, int Y, int from_move) {
-		int freeCount = 0;
-		int dy = MOVES[from_move][1]; // could be 1 or -1
-		while (Y >= 0 && Y < HEIGHT && maze[tomaze(X, Y)] == -1) {
-			freeCount++;
-			Y += dy;
-			System.err.format("getdy: Y=%d, dy=%d\n", Y, dy);
-		}
-		return freeCount;
-	}
-
-	public int selectZoneToMoveFirst(Vector<Integer> race, int X1, int Y1) {
-		int selected_move = race.elementAt(0);
+	public Move selectZoneToMoveFirst(Vector<Move> race, int x, int y) {
+		Move selected_move = moves.elementAt(0);
 		int max_dxy = 0;
-		for (Integer possibleMove : race) {
-			int move_x = X1 + MOVES[possibleMove][0];
-			int move_y = Y1 + MOVES[possibleMove][1];
+		for (Move possibleMove : race) {
 
-			switch (possibleMove) {
-			case UP: {
-				int tmp = getDY(move_x, move_y, UP);
-				if (max_dxy < tmp) {
-					max_dxy = tmp;
-					selected_move = UP;
-				}
+			int tmp = getDXY(x, y, possibleMove);
+			if (max_dxy < tmp) {
+				max_dxy = tmp;
+				selected_move = possibleMove;
 			}
-				break;
-			case DOWN: {
-				int tmp = getDY(move_x, move_y, DOWN);
-				if (max_dxy < tmp) {
-					max_dxy = tmp;
-					selected_move = DOWN;
-				}
-				break;
-			}
-			case LEFT: {
-				int tmp = getDX(move_x, move_y, LEFT);
-				if (max_dxy < tmp) {
-					max_dxy = tmp;
-					selected_move = LEFT;
-				}
-				break;
-			}
-			case RIGHT: {
-				int tmp = getDX(move_x, move_y, RIGHT);
-				if (max_dxy < tmp) {
-					max_dxy = tmp;
-					selected_move = RIGHT;
-				}
-				break;
-			}
-			}
-
-			// check if dx or dy is better than standart going to pre-define
-			// path UDRL
-
 		}
-
-		System.err.format("max_dxy= %d, move = %s", max_dxy, MOVES_STR[selected_move]);
+		System.err.format("max_dxy= %d, move = %s\n", max_dxy, selected_move);
 		return selected_move;
 	}
 
@@ -127,6 +121,7 @@ class Player {
 
 		System.err.format("P = %d\n", P);
 
+		int PX1 = 0, PY1 = 0;
 		for (int i = 0; i < N; i++) {
 			int X0 = in.nextInt(); // starting X coordinate of lightcycle (or
 									// -1)
@@ -139,19 +134,22 @@ class Player {
 									// be the same as Y0 if you play before this
 									// player)
 
-			System.err.format("%d> (%d, %d) (%d, %d)", i, X0, Y0, X1, Y1);
+			System.err.format("%d> (%d, %d) (%d, %d)\n", i, X0, Y0, X1, Y1);
 
 			if (i != P) {
-				maze[tomaze(X1, Y1)] = i;
+				maze.occupy(X1, Y1, i);
+				maze.occupy(X0, Y0, i);
 			} else {
-				possibleMoves(moves, X1, Y1);
-
-				Integer move = selectZoneToMoveFirst(moves, X1, Y1);
-				maze[tomaze(X1 + MOVES[move][0], Y1 + MOVES[move][1])] = i;
-				System.out.println(MOVES_STR[move]);
+				PX1 = X1;
+				PY1 = Y1;
+				maze.occupy(X0, Y0, P);
 			}
 		}
 
+		possibleMoves(moves, PX1, PY1);
+		Move move = selectZoneToMoveFirst(moves, PX1, PY1);
+		maze.occupy(move.toCoordinates(PX1, PY1), P);
+		System.out.println(move);
 	}
 
 	public static void main(String args[]) {
