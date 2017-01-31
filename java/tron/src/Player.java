@@ -54,7 +54,7 @@ class Player {
 		while (X >= 0 && X < WIDTH && maze[tomaze(X, Y)] == -1) {
 			freeCount++;
 			X += dx;
-			System.err.format("getdx: X=%d, dx=%d", X, dx);
+			System.err.format("getdx: X=%d, dx=%d\n", X, dx);
 		}
 		return freeCount;
 	}
@@ -65,7 +65,7 @@ class Player {
 		while (Y >= 0 && Y < HEIGHT && maze[tomaze(X, Y)] == -1) {
 			freeCount++;
 			Y += dy;
-			System.err.println("getdy");
+			System.err.format("getdy: Y=%d, dy=%d\n", Y, dy);
 		}
 		return freeCount;
 	}
