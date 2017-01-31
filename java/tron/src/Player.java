@@ -14,7 +14,7 @@ class Player {
 	private final static int RIGHT = 2;
 	private final static int LEFT = 3;
 
-	private final static int[][] MOVES = { { 0, -1 }, { 0, 1 }, { 0, 1 }, { -1, 0 } };
+	private final static int[][] MOVES = { { 0, -1 }, { 0, 1 }, { 1, 0 }, { -1, 0 } };
 
 	private Vector<Integer> moves = new Vector<Integer>();
 
@@ -48,6 +48,79 @@ class Player {
 		}
 	}
 
+	public int getDX(int X, int Y, int from_move) {
+		int freeCount = 0;
+		int dx = MOVES[from_move][0]; // could be 1 or -1
+		while (X >= 0 && X < WIDTH && maze[tomaze(X, Y)] == -1) {
+			freeCount++;
+			X += dx;
+			System.err.format("getdx: X=%d, dx=%d", X, dx);
+		}
+		return freeCount;
+	}
+
+	public int getDY(int X, int Y, int from_move) {
+		int freeCount = 0;
+		int dy = MOVES[from_move][1]; // could be 1 or -1
+		while (Y >= 0 && Y < HEIGHT && maze[tomaze(X, Y)] == -1) {
+			freeCount++;
+			Y += dy;
+			System.err.println("getdy");
+		}
+		return freeCount;
+	}
+
+	public int selectZoneToMoveFirst(Vector<Integer> race, int X1, int Y1) {
+		int selected_move = race.elementAt(0);
+		int max_dxy = 0;
+		for (Integer possibleMove : race) {
+			int move_x = X1 + MOVES[possibleMove][0];
+			int move_y = Y1 + MOVES[possibleMove][1];
+
+			switch (possibleMove) {
+			case UP: {
+				int tmp = getDY(move_x, move_y, UP);
+				if (max_dxy < tmp) {
+					max_dxy = tmp;
+					selected_move = UP;
+				}
+			}
+				break;
+			case DOWN: {
+				int tmp = getDY(move_x, move_y, DOWN);
+				if (max_dxy < tmp) {
+					max_dxy = tmp;
+					selected_move = DOWN;
+				}
+				break;
+			}
+			case LEFT: {
+				int tmp = getDX(move_x, move_y, LEFT);
+				if (max_dxy < tmp) {
+					max_dxy = tmp;
+					selected_move = LEFT;
+				}
+				break;
+			}
+			case RIGHT: {
+				int tmp = getDX(move_x, move_y, RIGHT);
+				if (max_dxy < tmp) {
+					max_dxy = tmp;
+					selected_move = RIGHT;
+				}
+				break;
+			}
+			}
+
+			// check if dx or dy is better than standart going to pre-define
+			// path UDRL
+
+		}
+
+		System.err.format("max_dxy= %d, move = %s", max_dxy, MOVES_STR[selected_move]);
+		return selected_move;
+	}
+
 	public void runer(Scanner in) {
 		int N = in.nextInt(); // total number of players (2 to 4).
 		int P = in.nextInt(); // your player number (0 to 3).
@@ -66,14 +139,15 @@ class Player {
 									// be the same as Y0 if you play before this
 									// player)
 
+			System.err.format("%d> (%d, %d) (%d, %d)", i, X0, Y0, X1, Y1);
+
 			if (i != P) {
 				maze[tomaze(X1, Y1)] = i;
 			} else {
 				possibleMoves(moves, X1, Y1);
 
-				Integer move = moves.elementAt(0);
+				Integer move = selectZoneToMoveFirst(moves, X1, Y1);
 				maze[tomaze(X1 + MOVES[move][0], Y1 + MOVES[move][1])] = i;
-
 				System.out.println(MOVES_STR[move]);
 			}
 		}
