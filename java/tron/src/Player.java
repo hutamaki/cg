@@ -1,4 +1,5 @@
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Scanner;
 import java.util.Vector;
 
@@ -61,6 +62,85 @@ class Move {
 	}
 }
 
+class Coordinates
+{
+	public int x;
+	public int y;
+	
+	public Coordinates(int x, int y) {
+		this.x = x;
+		this.y = y;
+	}
+	
+	/*
+	 * from http://stackoverflow.com/questions/113511/best-implementation-for-hashcode-method
+	 * @see java.lang.Object#hashCode()
+	 */
+	public int hashCode() {
+		int result = 128;
+		result = 37 * result + this.x;
+		result = 37 * result + this.y;
+		return result;
+	}
+
+}
+
+class Timeit {
+	private static long begin = 0;
+	private static long end = 0;
+	
+	public static void begin() {
+		begin = System.nanoTime();
+	}
+	
+	public static void end() {
+		end = System.nanoTime();
+	}
+	
+	public static long diff() {
+		return end - begin;
+	}
+	
+	public static void EndAndDisp(String method) {
+		System.err.format("timeit: %d\n elapsed in %s", diff(), method);
+	}
+}
+
+class MazeTree {
+	
+	public final static int WIDTH = 30;
+	public final static int HEIGHT = 20;
+	
+	private HashMap<Coordinates, Coordinates[]> neighbours = new HashMap<>();
+	 
+	public MazeTree() {
+		
+		Timeit.begin();
+		for (int i = 0; i < WIDTH; i++) {
+			Vector<Coordinates> localneighbours = new Vector<>();
+			for (int j = 0; j < HEIGHT; j++) {
+				localneighbours.clear();
+				if (i < WIDTH - 1) {
+					localneighbours.add(new Coordinates(i + 1, j));
+				}
+				if (i > 0) {
+					localneighbours.add(new Coordinates(i - 1, j));
+				}
+				if (j < HEIGHT - 1) {
+					localneighbours.add(new Coordinates(i, j + 1)); 
+				}
+				if (j > 0) {
+					localneighbours.add(new Coordinates(i, j - 1));
+				}				
+				Coordinates[] tmpArray = new Coordinates[localneighbours.size()]; 
+				localneighbours.toArray(tmpArray);
+				neighbours.put(new Coordinates(i, j), tmpArray);
+			}
+		}
+		Timeit.EndAndDisp("MazeTree()");
+	}
+}
+
 class Player {
 
 	private final static int UP = 0;
@@ -72,6 +152,8 @@ class Player {
 
 	private Vector<Move> moves = new Vector<Move>();
 	private final Maze maze = new Maze();
+	
+	public final MazeTree mazeTree = new MazeTree();
 
 	private void possibleMoves(Vector<Move> race, int x, int y) {
 		race.clear();
