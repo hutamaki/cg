@@ -24,7 +24,7 @@ class Maze {
 	}
 
 	public void occupy(int coordinate, int p) {
-		maze[coordinate] = p;		
+		maze[coordinate] = p;
 		System.err.format("occupy: %d | p=%d\n", coordinate, maze[coordinate]);
 	}
 }
@@ -62,18 +62,19 @@ class Move {
 	}
 }
 
-class Coordinates
-{
+class Coordinates {
 	public int x;
 	public int y;
-	
+
 	public Coordinates(int x, int y) {
 		this.x = x;
 		this.y = y;
 	}
-	
+
 	/*
-	 * from http://stackoverflow.com/questions/113511/best-implementation-for-hashcode-method
+	 * from http://stackoverflow.com/questions/113511/best-implementation-for-
+	 * hashcode-method
+	 * 
 	 * @see java.lang.Object#hashCode()
 	 */
 	public int hashCode() {
@@ -88,33 +89,33 @@ class Coordinates
 class Timeit {
 	private static long begin = 0;
 	private static long end = 0;
-	
+
 	public static void begin() {
 		begin = System.nanoTime();
 	}
-	
+
 	public static void end() {
 		end = System.nanoTime();
 	}
-	
+
 	public static long diff() {
 		return end - begin;
 	}
-	
+
 	public static void EndAndDisp(String method) {
 		System.err.format("timeit: %d\n elapsed in %s", diff(), method);
 	}
 }
 
 class MazeTree {
-	
+
 	public final static int WIDTH = 30;
 	public final static int HEIGHT = 20;
-	
+
 	private HashMap<Coordinates, Coordinates[]> neighbours = new HashMap<>();
-	 
+
 	public MazeTree() {
-		
+
 		Timeit.begin();
 		for (int i = 0; i < WIDTH; i++) {
 			Vector<Coordinates> localneighbours = new Vector<>();
@@ -127,12 +128,12 @@ class MazeTree {
 					localneighbours.add(new Coordinates(i - 1, j));
 				}
 				if (j < HEIGHT - 1) {
-					localneighbours.add(new Coordinates(i, j + 1)); 
+					localneighbours.add(new Coordinates(i, j + 1));
 				}
 				if (j > 0) {
 					localneighbours.add(new Coordinates(i, j - 1));
-				}				
-				Coordinates[] tmpArray = new Coordinates[localneighbours.size()]; 
+				}
+				Coordinates[] tmpArray = new Coordinates[localneighbours.size()];
 				localneighbours.toArray(tmpArray);
 				neighbours.put(new Coordinates(i, j), tmpArray);
 			}
@@ -152,7 +153,7 @@ class Player {
 
 	private Vector<Move> moves = new Vector<Move>();
 	private final Maze maze = new Maze();
-	
+
 	public final MazeTree mazeTree = new MazeTree();
 
 	private void possibleMoves(Vector<Move> race, int x, int y) {
@@ -178,7 +179,8 @@ class Player {
 			X += move.dx;
 			Y += move.dy;
 		}
-		System.err.format("getdxy: X=%d, Y=%d, dx=%d, dy=%d, freeCount=%d (move=%s)\n", X, Y, move.dx, move.dy, freeCount, move);
+		System.err.format("getdxy: X=%d, Y=%d, dx=%d, dy=%d, freeCount=%d (move=%s)\n", X, Y, move.dx, move.dy,
+				freeCount, move);
 		return freeCount;
 	}
 
@@ -198,48 +200,40 @@ class Player {
 	}
 
 	public void runer(Scanner in) {
-		int N = in.nextInt(); // total number of players (2 to 4).
-		int P = in.nextInt(); // your player number (0 to 3).
 
-		System.err.format("P = %d\n", P);
+		while (true) {
+			int N = in.nextInt(); // total number of players (2 to 4).
+			int P = in.nextInt(); // your player number (0 to 3).
 
-		int PX1 = 0, PY1 = 0;
-		for (int i = 0; i < N; i++) {
-			int X0 = in.nextInt(); // starting X coordinate of lightcycle (or
-									// -1)
-			int Y0 = in.nextInt(); // starting Y coordinate of lightcycle (or
-									// -1)
-			int X1 = in.nextInt(); // starting X coordinate of lightcycle (can
-									// be the same as X0 if you play before this
-									// player)
-			int Y1 = in.nextInt(); // starting Y coordinate of lightcycle (can
-									// be the same as Y0 if you play before this
-									// player)
+			System.err.format("P = %d\n", P);
 
-			System.err.format("%d> (%d, %d) (%d, %d)\n", i, X0, Y0, X1, Y1);
+			int PX1 = 0, PY1 = 0;
+			for (int i = 0; i < N; i++) {
+				int X0 = in.nextInt(); // starting X coordinate of lightcycle (or -1)
+				int Y0 = in.nextInt(); // starting Y coordinate of lightcycle (or -1)
+				int X1 = in.nextInt(); // starting X coordinate of lightcycle (can be the same as X0 if you play before this player)
+				int Y1 = in.nextInt(); // starting Y coordinate of lightcycle (can be the same as Y0 if you play before this player)
 
-			if (i != P) {
-				maze.occupy(X1, Y1, i);
-				maze.occupy(X0, Y0, i);
-			} else {
-				PX1 = X1;
-				PY1 = Y1;
-				maze.occupy(X0, Y0, P);
+				System.err.format("%d> (%d, %d) (%d, %d)\n", i, X0, Y0, X1, Y1);
+
+				if (i != P) {
+					maze.occupy(X1, Y1, i);
+					maze.occupy(X0, Y0, i);
+				} else {
+					PX1 = X1;
+					PY1 = Y1;
+					maze.occupy(X0, Y0, P);
+				}
 			}
-		}
 
-		possibleMoves(moves, PX1, PY1);
-		Move move = selectZoneToMoveFirst(moves, PX1, PY1);
-		maze.occupy(move.toCoordinates(PX1, PY1), P);
-		System.out.println(move);
+			possibleMoves(moves, PX1, PY1);
+			Move move = selectZoneToMoveFirst(moves, PX1, PY1);
+			maze.occupy(move.toCoordinates(PX1, PY1), P);
+			System.out.println(move);
+		}
 	}
 
 	public static void main(String args[]) {
-		Scanner in = new Scanner(System.in);
-		Player player = new Player();
-
-		while (true) {
-			player.runer(in);
-		}
+		new Player().runer(new Scanner(System.in));
 	}
 }
