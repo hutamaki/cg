@@ -1,11 +1,8 @@
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
 import java.util.Vector;
-
-import timeit.Timeit;
 
 class Coordinates {
 	public int x;
@@ -15,13 +12,15 @@ class Coordinates {
 	public Coordinates(int x, int y) {
 		this.x = x;
 		this.y = y;
-		hashCode = y * MazeTree.HEIGHT + x;
+		hashCode = y * MazeTree.WIDTH + x;
 	}
 
+	@Override
 	public int hashCode() {
 		return hashCode;
 	}
 
+	@Override
 	public boolean equals(Object o) {
 		if (!(o instanceof Coordinates)) {
 			return false;
@@ -36,10 +35,8 @@ class Coordinates {
 		strBuff.append(y);
 		strBuff.append(")");
 		return strBuff.toString();
-
 	}
 }
-
 
 
 class MazeTree {
@@ -50,8 +47,6 @@ class MazeTree {
 	private HashMap<Coordinates, Coordinates[]> neighbours = new HashMap<>();
 
 	public MazeTree() {
-
-		Timeit.begin();
 		for (int i = 0; i < WIDTH; i++) {
 			Vector<Coordinates> localneighbours = new Vector<>();
 			for (int j = 0; j < HEIGHT; j++) {
@@ -73,7 +68,6 @@ class MazeTree {
 				neighbours.put(new Coordinates(i, j), tmpArray);
 			}
 		}
-		Timeit.EndAndDisp("MazeTree()");
 	}
 
 	public Coordinates[] getNeighbours(Coordinates coordinates) {
@@ -81,11 +75,43 @@ class MazeTree {
 	}
 }
 
+class OccupiedGrahpSet
+{
+	public final static int HEIGHT = 20;
+	public final static int WIDTH = 30;
+
+	private final int[] map = new int[HEIGHT * WIDTH];
+	
+	public OccupiedGrahpSet(Set<Coordinates> graphset) {
+		for (Coordinates c : graphset) {
+			if (c.equals(Player.DEAD_BOT)) 
+				continue ;
+			map[c.hashCode()] = Integer.MAX_VALUE;
+		}
+	}
+	
+	public void set(Coordinates c) {
+		map[c.hashCode()] = Integer.MAX_VALUE;
+	}
+	
+	public boolean contains(Coordinates c) {
+		return map[c.hashCode()] != 0;
+	}	
+};
+
+/*class MovesPerPlayer
+{
+	private 
+	public MovesPerPlayer(int nbPlayer) {
+		
+	}
+};*/
+
 class Player {
 
 	private final MazeTree mazeTree = new MazeTree();
 	private final HashMap<Coordinates, Integer> occupied = new HashMap<>();
-	private static final Coordinates DEAD_BOT = new Coordinates(-1, -1);
+	public static final Coordinates DEAD_BOT = new Coordinates(-1, -1);
 
 	private Vector<Coordinates> curr_moves = new Vector<>();
 	private int myId;
@@ -102,7 +128,8 @@ class Player {
 		}
 
 		int turn = 1;
-		Set<Coordinates> graphset = new HashSet<>(occupied.keySet());
+		//Set<Coordinates> graphset = new HashSet<>(occupied.keySet());
+		OccupiedGrahpSet ogs = new OccupiedGrahpSet(occupied.keySet());
 
 		// play order
 		int[] order = new int[nbPlayers];
@@ -124,9 +151,9 @@ class Player {
 					Coordinates[] neighbours = mazeTree.getNeighbours(playerPos);
 					for (Coordinates neighbour : neighbours) {
 						// if neighbour not visited by other bots earlier
-						if (!graphset.contains(neighbour) || (moves.containsKey(neighbour) && turn == 1)) {
+						if (!ogs.contains(neighbour) || (moves.containsKey(neighbour) && turn == 1)) {
 							Full = false;
-							graphset.add(neighbour);
+							ogs.set(neighbour);
 							moves.put(neighbour, o);
 
 							// update the graph position while we are on it
@@ -173,7 +200,7 @@ class Player {
 				}
 			}
 		}
-		long score = (long) (numberMyTiles * 1000) + (sumOfEnemyTiles * -10) + sumOfEnemyDistances;
+		long score = (long) (numberMyTiles * 10000000) + (sumOfEnemyTiles * -100000) + sumOfEnemyDistances;
 		return score;
 	}
 
@@ -183,8 +210,10 @@ class Player {
 		while (true) {
 			v.clear();
 
-			int l_nbPlayers = in.nextInt(); // total number of players (2 to 4).
-			int l_myId = in.nextInt(); // your player number (0 to 3).
+			int l_nbPlayers = in.nextInt();
+			int l_myId = in.nextInt();
+			
+			System.err.format("%d / %d\n", l_myId, l_nbPlayers);
 
 			v.clear();
 			for (int i = 0; i < l_nbPlayers; i++) {
@@ -194,6 +223,8 @@ class Player {
 				int Y0 = in.nextInt();
 				int X1 = in.nextInt();
 				int Y1 = in.nextInt();
+				
+				System.err.format("%d %d %d %d\n", X0, Y0, X1, Y1);
 
 				playerPos.add(X0);
 				playerPos.add(Y0);
@@ -223,12 +254,13 @@ class Player {
 			int X1 = input.elementAt(2);
 			int Y1 = input.elementAt(3);
 
-			occupied.put(new Coordinates(X0, Y0), i);
-			occupied.put(new Coordinates(X1, Y1), i);
-			curr_moves.add(new Coordinates(X1, Y1));
+			Coordinates x_0 = new Coordinates(X0, Y0);
+			Coordinates x_t = new Coordinates(X1, Y1);
+
+			occupied.put(x_0, i);
+			occupied.put(x_t, i);
+			curr_moves.add(x_t);
 		}
-
-
 
 		Coordinates coord = curr_moves.elementAt(myId);
 		for (Coordinates neighbour : mazeTree.getNeighbours(coord)) {
@@ -242,7 +274,7 @@ class Player {
 
 			// if next neighbour is free
 			if (occupied.containsKey(neighbour))
-				continue;
+				continue;			
 
 			// we consider it as a new possible starting position
 			fixPayerPosition(neighbour, player_starts);
@@ -275,7 +307,7 @@ class Player {
 	private void removeDeadPlayersMoves(Vector<Vector<Coordinates>> player_starts) {
 		for (int z = 0; z < curr_moves.size(); z++) {
 			Coordinates cm = curr_moves.elementAt(z);
-			if (cm == DEAD_BOT) {
+			if (cm.equals(DEAD_BOT)) {
 				player_starts.elementAt(z).clear();
 			}
 		}

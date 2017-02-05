@@ -77,7 +77,87 @@ public class TestTron {
 			System.out.println("res> " + res);
 			assertEquals("DOWN", res);
 		}
-
 	}
+	
+	@Test
+	public void testThreePlayerOnePassWrong() {
 
+		Player p = new Player();
+		{
+			Vector<Vector<Integer>> v = new Vector<Vector<Integer>>();
+			Vector<Integer> player1 = new Vector<>();
+			player1.add(-1);
+			player1.add(-1);
+			player1.add(-1);
+			player1.add(-1);
+			v.add(player1);
+
+			Vector<Integer> player2 = new Vector<>();
+			player2.add(18);
+			player2.add(19);
+			player2.add(18);
+			player2.add(19);
+			v.add(player2);
+			
+			Vector<Integer> player3 = new Vector<>();
+			player3.add(2);
+			player3.add(3);
+			player3.add(2);
+			player3.add(3);
+			v.add(player3);
+
+			String res = p.doTheRun(3, 1, v);
+			System.out.println("res> " + res);
+			assertEquals("RIGHT", res);
+		}
+	}
+	
+	public static void addMove(Vector<Integer> player, int x0, int y0, int x1, int y1) {
+		player.add(x0);
+		player.add(y0);
+		player.add(x1);
+		player.add(y1);
+	}
+	
+	@Test
+	public void testThreePlayerTwoPassWrong() {
+
+		Player p = new Player();
+		{
+			Vector<Vector<Integer>> v = new Vector<Vector<Integer>>();
+			Vector<Integer> player1 = new Vector<>();
+			addMove(player1, 16, 7, 15, 7);
+			v.add(player1);
+
+			Vector<Integer> player2 = new Vector<>();
+			addMove(player2, 13, 12, 14, 12);
+			v.add(player2);
+			
+			Vector<Integer> player3 = new Vector<>();
+			addMove(player3, 10, 3, 10, 3);
+			v.add(player3);
+
+			String res = p.doTheRun(3, 2, v);
+			System.out.println("res> " + res);
+			assertEquals("RIGHT", res);
+		}
+		{
+			Vector<Vector<Integer>> v = new Vector<Vector<Integer>>();
+			Vector<Integer> player1 = new Vector<>();
+			addMove(player1, 16, 7, 15, 8);
+			v.add(player1);
+
+			Vector<Integer> player2 = new Vector<>();
+			addMove(player2, 13, 12, 15, 12);
+			v.add(player2);
+			
+			Vector<Integer> player3 = new Vector<>();
+			addMove(player3, 10, 3, 9, 3);
+			v.add(player3);
+
+			String res = p.doTheRun(3, 2, v);
+			System.out.println("res> " + res);
+			assertEquals("RIGHT", res);
+		}
+	}
 }
