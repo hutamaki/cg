@@ -1,4 +1,3 @@
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -113,7 +112,6 @@ class Player {
 	private final MazeTree mazeTree = new MazeTree();
 	private final HashMap<Coordinates, Integer> occupied = new HashMap<>();
 	private static final Coordinates DEAD_BOT = new Coordinates(-1, -1);
-	private final Vector<Vector<Coordinates>> player_starts = new Vector<Vector<Coordinates>>();
 
 	private Vector<Coordinates> curr_moves = new Vector<>();
 	private int myId;
@@ -123,7 +121,7 @@ class Player {
 
 	public long score(Vector<Vector<Coordinates>> player_starts) {
 
-		// player -> coordinates -> interator
+		// player -> coordinates -> iteration
 		HashMap<Integer, HashMap<Coordinates, Integer>> graphs = new HashMap<>();
 		for (int i = 0; i < nbPlayers; i++) {
 			graphs.put(i, new HashMap<>());
@@ -140,7 +138,7 @@ class Player {
 
 		while (true) {
 
-			Timeit.begin();
+			//Timeit.begin();
 
 			boolean Full = true;
 			HashMap<Coordinates, Integer> moves = new HashMap<>();
@@ -168,26 +166,32 @@ class Player {
 			if (Full)
 				break;
 
+			for (int i = 0; i < nbPlayers; i++) {
+				player_starts.elementAt(i).clear();
+			}
+
 			for (Map.Entry<Coordinates, Integer> move : moves.entrySet()) {
 				player_starts.elementAt(move.getValue()).add(move.getKey());
 			}
 
-			System.err.println("it " + turn);
-			Timeit.EndAndDisp("score");
+			turn++;
+			/*System.err.println("it " + turn);
+			Timeit.EndAndDisp("score");*/
 		}
 
 		// number of tiles
-		int numberMyTiles = graphs.get(myId).size();
+		long numberMyTiles = graphs.get(myId).size();
 
 		// number of tiles for every player
-		int sumOfEnemyTiles = 0;
-		int sumOfEnemyDistances = 0;
+		long sumOfEnemyTiles = 0;
+		long sumOfEnemyDistances = 0;
 		for (int id = 0; id < nbPlayers; id++) {
 			if (id != myId) {
 				HashMap<Coordinates, Integer> positions = graphs.get(id);
 				sumOfEnemyTiles += positions.size();
+
 				for (int i = 0; i < nbPlayers; i++) {
-					if (id != myId) {
+					if (i != myId) {
 						for (Integer turned : positions.values()) {
 							sumOfEnemyDistances += turned;
 						}
@@ -195,7 +199,8 @@ class Player {
 				}
 			}
 		}
-		return (numberMyTiles * 10000000) + (sumOfEnemyTiles * -100000) + sumOfEnemyDistances;
+		long score = (long) (numberMyTiles * 10000000) + (sumOfEnemyTiles * -100000) + sumOfEnemyDistances;
+		return score;
 	}
 
 	public void runer(Scanner in) {
@@ -204,12 +209,11 @@ class Player {
 		while (true) {
 			v.clear();
 
-			nbPlayers = in.nextInt(); // total number of players (2 to 4).
-			myId = in.nextInt(); // your player number (0 to 3).
+			int l_nbPlayers = in.nextInt(); // total number of players (2 to 4).
+			int l_myId = in.nextInt(); // your player number (0 to 3).
 
-			// add new occupy coordinates
-			curr_moves.clear();
-			for (int i = 0; i < nbPlayers; i++) {
+			v.clear();
+			for (int i = 0; i < l_nbPlayers; i++) {
 
 				Vector<Integer> playerPos = new Vector<>();
 				int X0 = in.nextInt();
@@ -224,11 +228,16 @@ class Player {
 
 				v.add(playerPos);
 			}
-			doTheRun(v);
+			System.out.format("%s\n", doTheRun(l_nbPlayers, l_myId, v));
 		}
 	}
 
-	public void doTheRun(Vector<Vector<Integer>> v) {
+	public String doTheRun(int nbPlayer, int myId, Vector<Vector<Integer>> v) {
+
+		long score = 0;
+		this.bestScore = 0;
+		this.nbPlayers = nbPlayer;
+		this.myId = myId;
 
 		// add new occupy coordinates
 		curr_moves.clear();
@@ -245,48 +254,57 @@ class Player {
 			curr_moves.add(new Coordinates(X1, Y1));
 		}
 
-		// remove dead bots from occupied
-		for (int i = 0; i < curr_moves.size(); i++) {
-			Coordinates cm = curr_moves.elementAt(i);
-			if (cm == DEAD_BOT) {
-				occupied.values().removeAll(Collections.singleton(i));
+
+
+		Coordinates coord = curr_moves.elementAt(myId);
+		for (Coordinates neighbour : mazeTree.getNeighbours(coord)) {
+			
+			// constructs move structures
+			// list of moves by player
+			Vector<Vector<Coordinates>> player_starts = initPlayersStart();
+
+			// remove dead bots from occupied
+			removeDeadPlayersMoves(player_starts);
+
+			// if next neighbour is free
+			if (occupied.containsKey(neighbour))
+				continue;
+
+			// we consider it as a new possible starting position
+			fixPayerPosition(neighbour, player_starts);
+
+			// and score this path
+			score = score(player_starts);
+			if (score > bestScore) {
+				bestScore = score;
+				bestNeighbour = neighbour;
 			}
 		}
+		//System.err.println("bestNeighbour= " + bestNeighbour);
+		return display(curr_moves.elementAt(myId), bestNeighbour);
+	}
 
-		// constructs move structures
-		// list of moves by player
-		player_starts.clear();
+	private void fixPayerPosition(Coordinates position, Vector<Vector<Coordinates>> player_starts) {
+		player_starts.elementAt(myId).clear();
+		player_starts.elementAt(myId).add(position);
+	}
+
+	private Vector<Vector<Coordinates>> initPlayersStart() {
+		Vector<Vector<Coordinates>> player_starts = new Vector<Vector<Coordinates>>();
 		for (int i = 0; i < nbPlayers; i++) {
 			player_starts.add(new Vector<Coordinates>());
 			player_starts.elementAt(i).add(curr_moves.elementAt(i));
 		}
+		return player_starts;
+	}
 
-		for (int i = 0; i < nbPlayers; i++) {
-			Coordinates coord = curr_moves.elementAt(i);
-			if (i == myId) {
-				for (Coordinates neighbour : mazeTree.getNeighbours(coord)) {
-					if (!occupied.containsKey(neighbour)) {
-						player_starts.elementAt(myId).clear();
-						player_starts.elementAt(myId).add(neighbour);
-
-						// remove dead players
-						for (int z = 0; z < curr_moves.size(); z++) {
-							Coordinates cm = curr_moves.elementAt(z);
-							if (cm == DEAD_BOT) {
-								player_starts.elementAt(z).clear();
-							}
-						}
-
-						long score = score(player_starts);
-						if (score > bestScore) {
-							bestScore = score;
-							bestNeighbour = neighbour;
-						}
-					}
-				}
+	private void removeDeadPlayersMoves(Vector<Vector<Coordinates>> player_starts) {
+		for (int z = 0; z < curr_moves.size(); z++) {
+			Coordinates cm = curr_moves.elementAt(z);
+			if (cm == DEAD_BOT) {
+				player_starts.elementAt(z).clear();
 			}
 		}
-		System.out.format("%s\n", display(curr_moves.elementAt(myId), bestNeighbour));
 	}
 
 	private String display(Coordinates oldC, Coordinates newC) {
