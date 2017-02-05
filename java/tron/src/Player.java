@@ -5,34 +5,28 @@ import java.util.Scanner;
 import java.util.Set;
 import java.util.Vector;
 
+import timeit.Timeit;
+
 class Coordinates {
 	public int x;
 	public int y;
+	private int hashCode;
 
 	public Coordinates(int x, int y) {
 		this.x = x;
 		this.y = y;
+		hashCode = y * MazeTree.HEIGHT + x;
 	}
 
-	/*
-	 * from http://stackoverflow.com/questions/113511/best-implementation-for-
-	 * hashcode-method
-	 * 
-	 * @see java.lang.Object#hashCode()
-	 */
 	public int hashCode() {
-		int result = 128;
-		result += 37 * result + this.x;
-		result += 37 * result + this.y;
-		return result;
+		return hashCode;
 	}
 
 	public boolean equals(Object o) {
 		if (!(o instanceof Coordinates)) {
 			return false;
 		}
-		Coordinates coord = (Coordinates) o;
-		return coord.x == x && coord.y == y;
+		return hashCode == ((Coordinates) o).hashCode();
 	}
 
 	public String toString() {
@@ -46,27 +40,7 @@ class Coordinates {
 	}
 }
 
-class Timeit {
-	private static long begin = 0;
-	private static long end = 0;
 
-	public static void begin() {
-		begin = System.currentTimeMillis();
-	}
-
-	public static void end() {
-		end = System.currentTimeMillis();
-	}
-
-	public static long diff() {
-		return end - begin;
-	}
-
-	public static void EndAndDisp(String method) {
-		end();
-		System.err.format("timeit: %d elapsed in %s\n", diff(), method);
-	}
-}
 
 class MazeTree {
 
@@ -199,7 +173,7 @@ class Player {
 				}
 			}
 		}
-		long score = (long) (numberMyTiles * 10000000) + (sumOfEnemyTiles * -100000) + sumOfEnemyDistances;
+		long score = (long) (numberMyTiles * 1000) + (sumOfEnemyTiles * -10) + sumOfEnemyDistances;
 		return score;
 	}
 
