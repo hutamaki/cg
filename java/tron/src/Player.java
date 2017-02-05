@@ -1,8 +1,11 @@
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
 import java.util.Vector;
+
+import javax.swing.plaf.basic.BasicInternalFrameTitlePane.MoveAction;
 
 class Coordinates {
 	public int x;
@@ -127,8 +130,7 @@ class Player {
 			graphs.put(i, new HashMap<>());
 		}
 
-		int turn = 1;
-		//Set<Coordinates> graphset = new HashSet<>(occupied.keySet());
+		int turn = 1;		
 		OccupiedGrahpSet ogs = new OccupiedGrahpSet(occupied.keySet());
 
 		// play order
@@ -145,19 +147,21 @@ class Player {
 			HashMap<Coordinates, Integer> moves = new HashMap<>();
 
 			// play each player
-			for (int o = 0; o < nbPlayers; o++) {
-				for (Coordinates playerPos : player_starts.elementAt(order[o])) {
+			for (int playerID : order) {
+				
+				for (Coordinates playerPos : player_starts.elementAt(playerID)) {
+					
+					//System.err.format(playerID + "> " + playerPos.toString() + "\n");
 					// for all neighbours of player pos
-					Coordinates[] neighbours = mazeTree.getNeighbours(playerPos);
-					for (Coordinates neighbour : neighbours) {
+					for (Coordinates neighbour : mazeTree.getNeighbours(playerPos)) {
 						// if neighbour not visited by other bots earlier
 						if (!ogs.contains(neighbour) || (moves.containsKey(neighbour) && turn == 1)) {
 							Full = false;
 							ogs.set(neighbour);
-							moves.put(neighbour, o);
+							moves.put(neighbour, playerID);
 
 							// update the graph position while we are on it
-							graphs.get(o).put(neighbour, turn);
+							graphs.get(playerID).put(neighbour, turn);
 						}
 					}
 				}
@@ -176,10 +180,8 @@ class Player {
 			}
 
 			turn++;
-			/*System.err.println("it " + turn);
-			Timeit.EndAndDisp("score");*/
 		}
-
+		
 		// number of tiles
 		long numberMyTiles = graphs.get(myId).size();
 

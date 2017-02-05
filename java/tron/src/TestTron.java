@@ -120,7 +120,7 @@ public class TestTron {
 	}
 	
 	@Test
-	public void testThreePlayerTwoPassWrong() {
+	public void testThreePlayersTwoPassWrong() {
 
 		Player p = new Player();
 		{
@@ -152,12 +152,54 @@ public class TestTron {
 			v.add(player2);
 			
 			Vector<Integer> player3 = new Vector<>();
-			addMove(player3, 10, 3, 9, 3);
+			addMove(player3, 10, 3, 11, 3);
 			v.add(player3);
 
 			String res = p.doTheRun(3, 2, v);
 			System.out.println("res> " + res);
-			assertEquals("RIGHT", res);
+			assertEquals("DOWN", res);
+		}
+	}
+	
+	@Test
+	public void testThreePlayersNoGoodPath() {
+
+		Player p = new Player();
+		{
+			Vector<Vector<Integer>> v = new Vector<Vector<Integer>>();
+			Vector<Integer> player1 = new Vector<>();
+			addMove(player1, 9, 5, 8, 5);
+			v.add(player1);
+
+			Vector<Integer> player2 = new Vector<>();
+			addMove(player2, 8, 14, 8, 14);
+			v.add(player2);
+			
+			Vector<Integer> player3 = new Vector<>();
+			addMove(player3, 0, 5, 0, 5);
+			v.add(player3);
+
+			String res = p.doTheRun(3, 1, v);
+			System.out.println("res> " + res);
+			assertEquals("UP", res);
+		}
+		{
+			Vector<Vector<Integer>> v = new Vector<Vector<Integer>>();
+			Vector<Integer> player1 = new Vector<>();
+			addMove(player1, 16, 7, 15, 8);
+			v.add(player1);
+
+			Vector<Integer> player2 = new Vector<>();
+			addMove(player2, 13, 12, 15, 12);
+			v.add(player2);
+			
+			Vector<Integer> player3 = new Vector<>();
+			addMove(player3, 10, 3, 11, 3);
+			v.add(player3);
+
+			String res = p.doTheRun(3, 2, v);
+			System.out.println("res> " + res);
+			assertEquals("DOWN", res);
 		}
 	}
 }
