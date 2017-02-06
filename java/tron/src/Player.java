@@ -1,11 +1,8 @@
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Scanner;
-import java.util.Set;
 import java.util.Vector;
-
-import javax.swing.plaf.basic.BasicInternalFrameTitlePane.MoveAction;
 
 class Coordinates {
 	public int x;
@@ -40,7 +37,6 @@ class Coordinates {
 		return strBuff.toString();
 	}
 }
-
 
 class MazeTree {
 
@@ -78,42 +74,50 @@ class MazeTree {
 	}
 }
 
-class OccupiedGrahpSet
-{
+class OccupiedGraphSet {
+
 	public final static int HEIGHT = 20;
 	public final static int WIDTH = 30;
+	public final static int DEFAULT_VALUE = -1;
+	private final static int TOTAL_LENGTH = HEIGHT * WIDTH;
 
-	private final int[] map = new int[HEIGHT * WIDTH];
-	
-	public OccupiedGrahpSet(Set<Coordinates> graphset) {
-		for (Coordinates c : graphset) {
-			if (c.equals(Player.DEAD_BOT)) 
-				continue ;
-			map[c.hashCode()] = Integer.MAX_VALUE;
+	protected final int[] map = new int[HEIGHT * WIDTH];
+
+	public OccupiedGraphSet() {
+		Arrays.fill(map, -1);
+	}
+
+	public OccupiedGraphSet(final OccupiedGraphSet graphSet) {
+		System.arraycopy(graphSet.map, 0, map, 0, TOTAL_LENGTH);
+	}
+
+	public void set(Coordinates c, int value) {
+		map[c.hashCode()] = value;
+	}
+
+	public boolean contains(Coordinates c) {
+		return map[c.hashCode()] != DEFAULT_VALUE;
+	}
+
+	public void resetPath(int pathValue) {
+		for (int i = 0; i < TOTAL_LENGTH; i++) {
+			if (map[i] == pathValue) {
+				map[i] = DEFAULT_VALUE;
+			}
 		}
 	}
-	
-	public void set(Coordinates c) {
-		map[c.hashCode()] = Integer.MAX_VALUE;
-	}
-	
-	public boolean contains(Coordinates c) {
-		return map[c.hashCode()] != 0;
-	}	
-};
+}
 
-/*class MovesPerPlayer
-{
-	private 
-	public MovesPerPlayer(int nbPlayer) {
-		
-	}
-};*/
+/*
+ * class MovesPerPlayer { private public MovesPerPlayer(int nbPlayer) {
+ * 
+ * } };
+ */
 
 class Player {
 
 	private final MazeTree mazeTree = new MazeTree();
-	private final HashMap<Coordinates, Integer> occupied = new HashMap<>();
+	private final OccupiedGraphSet occupied = new OccupiedGraphSet();
 	public static final Coordinates DEAD_BOT = new Coordinates(-1, -1);
 
 	private Vector<Coordinates> curr_moves = new Vector<>();
@@ -130,8 +134,8 @@ class Player {
 			graphs.put(i, new HashMap<>());
 		}
 
-		int turn = 1;		
-		OccupiedGrahpSet ogs = new OccupiedGrahpSet(occupied.keySet());
+		int turn = 1;
+		OccupiedGraphSet ogs = new OccupiedGraphSet(occupied);
 
 		// play order
 		int[] order = new int[nbPlayers];
@@ -141,23 +145,24 @@ class Player {
 
 		while (true) {
 
-			//Timeit.begin();
+			// Timeit.begin();
 
 			boolean Full = true;
 			HashMap<Coordinates, Integer> moves = new HashMap<>();
 
 			// play each player
 			for (int playerID : order) {
-				
+
 				for (Coordinates playerPos : player_starts.elementAt(playerID)) {
-					
-					//System.err.format(playerID + "> " + playerPos.toString() + "\n");
+
+					// System.err.format(playerID + "> " + playerPos.toString()
+					// + "\n");
 					// for all neighbours of player pos
 					for (Coordinates neighbour : mazeTree.getNeighbours(playerPos)) {
 						// if neighbour not visited by other bots earlier
 						if (!ogs.contains(neighbour) || (moves.containsKey(neighbour) && turn == 1)) {
 							Full = false;
-							ogs.set(neighbour);
+							ogs.set(neighbour, playerID);
 							moves.put(neighbour, playerID);
 
 							// update the graph position while we are on it
@@ -181,7 +186,7 @@ class Player {
 
 			turn++;
 		}
-		
+
 		// number of tiles
 		long numberMyTiles = graphs.get(myId).size();
 
@@ -214,7 +219,7 @@ class Player {
 
 			int l_nbPlayers = in.nextInt();
 			int l_myId = in.nextInt();
-			
+
 			System.err.format("%d / %d\n", l_myId, l_nbPlayers);
 
 			v.clear();
@@ -225,7 +230,7 @@ class Player {
 				int Y0 = in.nextInt();
 				int X1 = in.nextInt();
 				int Y1 = in.nextInt();
-				
+
 				System.err.format("%d %d %d %d\n", X0, Y0, X1, Y1);
 
 				playerPos.add(X0);
@@ -259,14 +264,16 @@ class Player {
 			Coordinates x_0 = new Coordinates(X0, Y0);
 			Coordinates x_t = new Coordinates(X1, Y1);
 
-			occupied.put(x_0, i);
-			occupied.put(x_t, i);
+			if (!x_t.equals(DEAD_BOT)) {
+				occupied.set(x_0, i);
+				occupied.set(x_t, i);
+			}
 			curr_moves.add(x_t);
 		}
 
 		Coordinates coord = curr_moves.elementAt(myId);
 		for (Coordinates neighbour : mazeTree.getNeighbours(coord)) {
-			
+
 			// constructs move structures
 			// list of moves by player
 			Vector<Vector<Coordinates>> player_starts = initPlayersStart();
@@ -275,8 +282,8 @@ class Player {
 			removeDeadPlayersMoves(player_starts);
 
 			// if next neighbour is free
-			if (occupied.containsKey(neighbour))
-				continue;			
+			if (occupied.contains(neighbour))
+				continue;
 
 			// we consider it as a new possible starting position
 			fixPayerPosition(neighbour, player_starts);
@@ -288,7 +295,7 @@ class Player {
 				bestNeighbour = neighbour;
 			}
 		}
-		//System.err.println("bestNeighbour= " + bestNeighbour);
+		// System.err.println("bestNeighbour= " + bestNeighbour);
 		return display(curr_moves.elementAt(myId), bestNeighbour);
 	}
 
@@ -311,6 +318,7 @@ class Player {
 			Coordinates cm = curr_moves.elementAt(z);
 			if (cm.equals(DEAD_BOT)) {
 				player_starts.elementAt(z).clear();
+				occupied.resetPath(z);
 			}
 		}
 	}
