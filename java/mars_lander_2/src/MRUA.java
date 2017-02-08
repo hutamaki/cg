@@ -1,4 +1,4 @@
-package mars_lander_2;
+
 
 import static org.junit.Assert.*;
 
