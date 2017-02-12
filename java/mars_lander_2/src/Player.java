@@ -12,7 +12,7 @@ class Point {
 		this.x = x;
 		this.y = y;
 	}
-	
+
 	public String toString() {
 		return "(" + x + ", " + y + ")";
 	}
@@ -28,13 +28,13 @@ class MathTools {
 	public static double getDistance(Point pos, Point target) {
 		return Math.sqrt(getDistance2(pos, target));
 	}
-	
+
 	public static int getDistance2(Point pos, Point target) {
 		int dx = target.x - pos.x;
 		int dy = target.y - pos.y;
 		return dx * dx + dy * dy;
 	}
-	
+
 	public static double getAngleFull(Point pos, Point target) {
 		double angle = getAngleMid(pos, target);
 		double dy = (target.y - pos.y);
@@ -43,12 +43,16 @@ class MathTools {
 		}
 		return angle;
 	}
-	
+
 	public static double getAngleMid(Point pos, Point target) {
 		double d = getDistance(pos, target);
 		double dx = (target.x - pos.x) / d;
-		return Math.acos(dx) * 180.0 / Math.PI;		
+		return Math.acos(dx) * 180.0 / Math.PI;
 	}
+}
+
+enum States {
+	STARTING, MIDDLE, LANDING
 }
 
 class Player {
@@ -57,6 +61,7 @@ class Player {
 	private int peak;
 
 	private Point landing;
+	private States state = States.STARTING;
 
 	/*
 	 * constructs the world map & gets the highest peak initializes array
@@ -244,15 +249,28 @@ class Player {
 		// v^2 = v0^2 + 2 * a (x - x0)
 		// http://www.physics.ohio-state.edu/~dws/class/131/lecture_recap.pdf
 		// => a = (v^2 - v0^2) / 2 * (x - x0)
+		if (state == States.STARTING) {
+			state = States.MIDDLE;
+			
+			// go to the right direction if we are not abose landing zone
+			int r = 0;
+			if (pos.x < landing.x) {
+				r = -45;
+			} else {
+				if (pos.x > landing.x) {
+					r = 45;
+				}
+			}
+			System.out.println(r + " " + 4);
 
-		int throwtle = (int) MRUA(pos.x, vSpeed, landing.x, 0);
-		System.err.println("throwtle: " + throwtle);
+		} else {
+			double acceleration = MRUA(pos.x, hSpeed, landing.x, 0);
+			System.err.println("acceleration: " + acceleration);
+			double r = (double) Math.atan(power / acceleration) * 180 / Math.PI;
+			System.err.println("r: " + r);
 
-		System.err.println(pos);
-		System.err.println(landing);
-		int r = (int)  -computeAngle(pos);
-
-		System.out.println(r + " " + throwtle);
+			System.out.println(rotate + " " + 4);
+		}
 	}
 
 	public static void main(String args[]) {
@@ -272,6 +290,15 @@ class Player {
 			int fuel = in.nextInt();
 			int rotate = in.nextInt();
 			int power = in.nextInt();
+
+			StringBuffer strBuff = new StringBuffer();
+			strBuff.append("X: ").append(X).append('\n');
+			strBuff.append("Y: ").append(Y).append('\n');
+			strBuff.append("hSpeed: ").append(hSpeed).append('\n');
+			strBuff.append("vSpeed: ").append(vSpeed).append('\n');
+			strBuff.append("fuel: ").append(fuel).append('\n');
+			strBuff.append("rotate: ").append(rotate).append('\n');
+			strBuff.append("power: ").append(power).append('\n');
 
 			p.land(new Point(X, Y), hSpeed, vSpeed, fuel, rotate, power);
 		}
