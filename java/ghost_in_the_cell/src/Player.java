@@ -75,7 +75,7 @@ class Player {
 					continue; // not a link
 				if (myFactories[i] != null)
 					continue; // it my factory
-				if (minDistance < neighbours[i]) {
+				if (minDistance > neighbours[i]) {
 					minDistance = neighbours[i];
 					theirs = i;
 					mine = factory.entityId;
