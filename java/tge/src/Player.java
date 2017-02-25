@@ -5,6 +5,113 @@ import java.util.PriorityQueue;
 import java.util.Scanner;
 import java.util.Vector;
 
+/************************************************************************
+ * TOOLS A-STAR
+ **************************************************************************/
+
+class Node<T> {
+	Node<T> parent;
+	T value;
+	int f, g, h;
+
+	public Node(T value) {
+		this.value = value;
+		f = g = h = 0;
+		parent = null;
+	}
+
+	@Override
+	public boolean equals(Object other) {
+		if (other instanceof Node<?>) {
+			if (((Node<?>) other).value.equals(value)) {
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
+interface Astarable<T> {
+	Vector<Node<T>> getSuccessors(Node<T> node);
+
+	boolean isGoal(Node<T> node);
+
+	int getDistance(Node<T> current, Node<T> sucessor);
+
+	int getDistanceFromGoal(Node<T> current);
+}
+
+class Astar<T> implements Runnable {
+	private PriorityQueue<Node<T>> openList;
+	private Vector<Node<T>> closeList = new Vector<>();
+	private Astarable<T> astarable;
+
+	public Astar(int initialCapacity, Astarable<T> astarable) {
+		openList = new PriorityQueue<>(initialCapacity, new Comparator<Node<T>>() {
+			@Override
+			public int compare(Node<T> arg0, Node<T> arg1) {
+				return arg0.f - arg1.f;
+			}
+		});
+		this.astarable = astarable;
+	}
+
+	void start(Node<T> startingPoint) {
+		openList.add(startingPoint);
+	}
+
+	/**
+	 * successor is interesting whenever it is not present or if its f is below
+	 * than a previous one
+	 */
+	boolean removeIfPresentAndLess(AbstractCollection<Node<T>> list, Node<T> successor) {
+		for (Node<T> element : list) {
+			if (element.equals(successor)) {
+				if (element.f <= successor.f) {
+					return false;
+				} else {
+					list.remove(element);
+					return true;
+				}
+			}
+		}
+		return true;
+	}
+
+	boolean considerWorthTrying(Node<T> successor) {
+		if (!removeIfPresentAndLess(openList, successor)) {
+			return false;
+		}
+		if (!removeIfPresentAndLess(closeList, successor)) {
+			return false;
+		}
+		return true;
+	}
+
+	@Override
+	public void run() {
+		while (!openList.isEmpty()) {
+			Node<T> current = openList.poll();
+			Vector<Node<T>> successors = astarable.getSuccessors(current);
+			for (Node<T> successor : successors) {
+
+				if (astarable.isGoal(successor)) {
+					successor.parent = current;
+					break;
+				}
+				successor.g = current.g + astarable.getDistance(current, successor);
+				successor.h = astarable.getDistanceFromGoal(successor);
+				successor.f = successor.g + successor.h;
+
+				if (considerWorthTrying(successor)) {
+					openList.add(successor);
+				}
+			}
+			closeList.add(current);
+		}
+	}
+}
+
 /**
  * Position on the map
  */
@@ -125,6 +232,54 @@ class Board {
 	}
 }
 
+class PathFinding implements Astarable<Unit> {
+
+	Game game;
+	int playerId;
+
+	public PathFinding(Game game, int playerId) {
+		this.game = game;
+		this.playerId = playerId;
+	}
+
+	@Override
+	public Vector<Node<Unit>> getSuccessors(Node<Unit> node) {
+		Unit[] possibleMoves = game.board.getMoves(node.value);
+		Vector<Node<Unit>> neighbours = new Vector<Node<Unit>>(possibleMoves.length);
+		for (Unit possibleMove : possibleMoves) {
+			neighbours.add(new Node<Unit>(possibleMove));
+		}
+		return neighbours;
+	}
+
+	@Override
+	public boolean isGoal(Node<Unit> node) { // goal hardcoded for every player
+		switch (playerId) {
+		case 0:
+			return node.value.x == (game.board.width - 1);
+		case 1:
+			return node.value.x == 0;
+		case 2:
+			return node.value.y == (game.board.height - 1);
+		default:
+			throw new RuntimeException("goal not defined for playerId !");
+		}
+	}
+
+	@Override
+	public int getDistance(Node<Unit> current, Node<Unit> sucessor) {
+		return Math.abs(sucessor.value.y - current.value.y) + Math.abs(sucessor.value.x - current.value.x);
+	}
+
+	@Override
+	public int getDistanceFromGoal(Node<Unit> current) {
+		if (game.goal.y == -1) { // means it's an X-goal
+			return Math.abs(current.value.x - game.goal.x);
+		}
+		return Math.abs(current.value.y - game.goal.y);
+	}
+}
+
 /**
  * Enter the Game
  */
@@ -136,6 +291,7 @@ class Game {
 	HashMap<Unit, Wall> walls = new HashMap<>();
 
 	Board board;
+	Unit goal;
 
 	public Game(Board board, int nbPlayers, int myId) {
 		this.board = board;
@@ -143,6 +299,29 @@ class Game {
 		this.myId = myId;
 
 		dragoons = new Dragoon[nbPlayers];
+		goal = defineGoal(myId);
+
+	}
+
+	public Unit defineGoal(int meId) {
+		Unit lgoal;
+		switch (meId) {
+		case 0: { // goal is RIGHT
+			lgoal = new Unit(board.width - 1, -1);
+		}
+			break;
+		case 1: { // goal is LEFT
+			lgoal = new Unit(0, -1);
+		}
+			break;
+		case 2: { // goal is BOTTOM
+			lgoal = new Unit(-1, board.height - 1);
+		}
+			break;
+		default:
+			throw new RuntimeException("undefined goal, not possible !");
+		}
+		return lgoal;
 	}
 
 	public Dragoon getMe() {
@@ -213,103 +392,6 @@ class Game {
 				// V (x,y)(x,y-1)
 				return isBlocked(from.x, from.y, from.x, from.y - 1, true);
 			}
-		}
-	}
-}
-
-class Node<T> {
-	Node<T> parent;
-	T node;
-	int f, g, h;
-
-	@Override
-	public boolean equals(Object other) {
-		if (other instanceof Node<?>) {
-			if (((Node<?>) other).node.equals(node)) {
-				return true;
-			}
-		}
-		return false;
-	}
-}
-
-interface Astarable<T> {
-	Node<T>[] getSuccessors(Node<T> node);
-
-	boolean isGoal(Node<T> node);
-
-	int getDistance(Node<T> current, Node<T> sucessor);
-
-	int getDistanceFromGoal(Node<T> current);
-}
-
-class Astar<T> implements Runnable {
-	private PriorityQueue<Node<T>> openList;
-	private Vector<Node<T>> closeList = new Vector<>();
-	private Astarable<T> astarable;
-
-	public Astar(int initialCapacity, Astarable<T> astarable) {
-		openList = new PriorityQueue<>(initialCapacity, new Comparator<Node<T>>() {
-			@Override
-			public int compare(Node<T> arg0, Node<T> arg1) {
-				return arg0.f - arg1.f;
-			}
-		});
-		this.astarable = astarable;
-	}
-
-	void start(Node<T> startingPoint) {
-		openList.add(startingPoint);
-	}
-
-	/**
-	 * successor is interesting whenever it is not present or if its f is below
-	 * than a previous one
-	 */
-	boolean removeIfPresentAndLess(AbstractCollection<Node<T>> list, Node<T> successor) {
-		for (Node<T> element : list) {
-			if (element.equals(successor)) {
-				if (element.f <= successor.f) {
-					return false;
-				} else {
-					list.remove(element);
-					return true;
-				}
-			}
-		}
-		return true;
-	}
-
-	boolean considerWorthTrying(Node<T> successor) {
-		if (!removeIfPresentAndLess(openList, successor)) {
-			return false;
-		}
-		if (!removeIfPresentAndLess(closeList, successor)) {
-			return false;
-		}
-		return true;
-	}
-
-	@Override
-	public void run() {
-		while (!openList.isEmpty()) {
-			Node<T> current = openList.poll();
-			Node<T>[] successors = astarable.getSuccessors(current);
-			for (Node<T> successor : successors) {
-
-				if (astarable.isGoal(successor)) {
-					successor.parent = current;
-					break;
-				}
-				successor.g = current.g + astarable.getDistance(current, successor);
-				successor.h = astarable.getDistanceFromGoal(successor);
-				successor.f = successor.g + successor.h;
-
-				if (considerWorthTrying(successor)) {
-					openList.add(successor);
-				}
-			}
-			closeList.add(current);
 		}
 	}
 }
