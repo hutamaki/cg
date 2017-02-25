@@ -66,25 +66,28 @@ class Player {
 		int mine = -1;
 		int theirs = -1;		
 		for (Factory factory : myFactories) {			
-			if (factory == null) continue ;
-			mine = factory.entityId;
+			if (factory == null) continue ;         // no factory here
+			if (factory.nbCyborg == 0) continue ;   // no more cyborgs			
 			Integer[] neighbours = map[factory.entityId];
 			for (int i = 0; i < factoryCount; i++) {
-				if (neighbours[i] == -1) continue;
-				if (neighbours[i] < minDistance) {
+				if (neighbours[i] == -1) continue;      // not a link
+				if (myFactories[i] != null) continue ;  // it my factory				
 					minDistance = neighbours[i];
 					theirs = i;
 					mine = factory.entityId;
 				}
 			}
+		if (mine == -1) {
+		    System.out.println("WAIT");
+		} else {
+		    System.out.format("MOVE %d %d %d\n", mine, theirs, myFactories[mine].nbCyborg);
 		}
-		System.out.format("MOVE %d %d\n", mine, theirs);
 	}
 	
 	public void upFactory(int entityId, int playerid, int nbCyborg, int production) {
 		Factory factory = new Factory(entityId, nbCyborg, production);	
 		System.err.println(factory);
-		if (playerid == -1) {
+		if (playerid != 1) {
 			theirFactories[entityId] = factory;
 			myFactories[entityId] = null;
 		} else {
@@ -110,7 +113,7 @@ class Player {
                 String entityType = in.next();
                 
                 if (entityType.equals("FACTORY")) {
-                	int arg1 = in.nextInt(); // joueur qui possède l'usine : 1 pour vous, -1 pour l'adversaire et 0 si neutre 
+                	int arg1 = in.nextInt(); // joueur qui possï¿½de l'usine : 1 pour vous, -1 pour l'adversaire et 0 si neutre 
                     int arg2 = in.nextInt(); // nombre de cyborgs dans l'usine
                     int arg3 = in.nextInt(); // production de l'usine (entre 0 et 3)
                     int arg4 = in.nextInt();
@@ -118,11 +121,11 @@ class Player {
                     player.upFactory(entityId, arg1, arg2, arg3);
                     
                 } else { // means "TROOP"	
-                    int arg1 = in.nextInt(); // joueur qui possède la troupe : 1 pour vous, -1 pour l'adversaire
-                    int arg2 = in.nextInt(); // identifiant de l'usine de départ
-                    int arg3 = in.nextInt(); // identifiant de l'usine d'arrivée
+                    int arg1 = in.nextInt(); // joueur qui possï¿½de la troupe : 1 pour vous, -1 pour l'adversaire
+                    int arg2 = in.nextInt(); // identifiant de l'usine de dï¿½part
+                    int arg3 = in.nextInt(); // identifiant de l'usine d'arrivï¿½e
                     int arg4 = in.nextInt(); // nombre de cyborgs au sein de la troupe (entier strictement positif)
-                    int arg5 = in.nextInt(); // nombre de tours avant d'arriver à destination (entier strictement positif)
+                    int arg5 = in.nextInt(); // nombre de tours avant d'arriver ï¿½ destination (entier strictement positif)
                 }
             }
             player.selectNearestNotMine();
