@@ -1,5 +1,7 @@
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Scanner;
+import java.util.Vector;
 
 class Factory {
 	public int entityId;
@@ -14,6 +16,10 @@ class Factory {
 
 	public int getTotalFromDistance(int distance) {
 		return this.nbCyborg + distance * this.production;
+	}
+
+	public int rate(int distance) {
+		return production * 1000000 - distance * 100000 - nbCyborg * 10000;
 	}
 
 	@Override
@@ -71,21 +77,56 @@ class Player {
 		}
 	}
 
+	int getDistance(Factory src, Factory dst) {
+		return map[src.entityId][dst.entityId];
+	}
+
+	class Tuple<U> implements Comparable<Tuple<U>> {
+		int rating;
+		U value;
+
+		public Tuple(int rating, U value) {
+			this.rating = rating;
+			this.value = value;
+		}
+
+		@Override
+		public int compareTo(Tuple<U> value) {
+			return this.rating - value.rating;
+		}
+	}
+
+	public void sortNeutralByFitness(Factory mine) {
+		Vector<Tuple<Factory>> values = new Vector<>(neutralFactories.length);
+		for (int i = 0; i < neutralFactories.length; i++) {
+			
+			if (neutralFactories[i] == null) continue;
+			
+			values.add(
+					new Tuple<>(neutralFactories[i].rate(getDistance(neutralFactories[i], mine)), neutralFactories[i]));
+		}
+		Collections.sort(values);
+
+		for (Tuple<Factory> tuple : values) {
+			System.err.format("rating= %d, factory=%s", tuple.rating, tuple.value);
+		}
+	}
+
 	/*
-	 * first phase attack send 2 cyborgs to gain all neutral bases that do not
-	 * have more than 2 cyborgs in stock, to gain production bomb maximum
-	 * (enemy?) stock base
+	 * Target max production sites, then min distances
 	 */
 	public String firstGamePhase() {
 		StringBuffer strBuff = new StringBuffer("WAIT");
 
 		/*
-		 * try to conquiert neutral factories
+		 * try to conqueir neutral factories
 		 */
 		for (Factory factory : myFactories) {
 
 			if (factory == null)
 				continue; // no factory here
+			
+			sortNeutralByFitness(factory);
 
 			Integer[] reachable = map[factory.entityId];
 
@@ -97,10 +138,14 @@ class Player {
 				if (neutralFactories[i] != null) // ok neutral factory reachable
 				{
 					Factory neutral = neutralFactories[i];
-					//if (neutral.nbCyborg <= MAX_NEUTRAL_CYBORG_FIRST_PHASE) {
-						strBuff.append(String.format("; MOVE %d %d %d", factory.entityId, neutral.entityId,
-								neutral.nbCyborg + 1));
-					//}
+
+					if (neutral.production == 0)
+						continue;
+
+					// if (neutral.nbCyborg <= MAX_NEUTRAL_CYBORG_FIRST_PHASE) {
+					strBuff.append(
+							String.format("; MOVE %d %d %d", factory.entityId, neutral.entityId, neutral.nbCyborg + 1));
+					// }
 				}
 			}
 		}
@@ -124,11 +169,43 @@ class Player {
 		}
 		return strBuff.toString();
 	}
-	
 
 	public String selectNearestNotMine() {
 
 		StringBuffer strBuff = new StringBuffer("WAIT");
+
+		/*
+		 * At each turn, try to conquiert remaining neutral factories, sending 2
+		 */
+		for (Factory factory : myFactories) {
+
+			if (factory == null)
+				continue; // no factory here
+
+			if (factory.nbCyborg == 0)
+				continue; // no more cyborgs
+
+			for (Factory neutral : neutralFactories) {
+
+				Integer[] neighbours = map[factory.entityId];
+				for (int i = 0; i < factoryCount; i++) {
+
+					if (neighbours[i] == -1)
+						continue; // not a link
+
+					if (neutralFactories[i] == null) // not a neutral factory
+						continue;
+
+					if (neutralFactories[i].production == 0) // do not produce
+																// anything,
+																// avoid
+						continue;
+
+					strBuff.append(String.format("; MOVE %d %d %d", factory.entityId, neutralFactories[i].entityId,
+							Math.max(neutralFactories[i].nbCyborg, 2)));
+				}
+			}
+		}
 
 		for (Factory factory : myFactories) {
 
@@ -167,37 +244,7 @@ class Player {
 				strBuff.append(String.format("; MOVE %d %d %d", factory.entityId, theirs, dist == 0 ? 2 : dist));
 			}
 		}
-		
-		/*
-		 * At each turn, try to conquiert remaining neutral factories, sending 2
-		 */
-		for (Factory factory : myFactories) {
 
-			if (factory == null)
-				continue; // no factory here
-			if (factory.nbCyborg == 0)
-				continue; // no more cyborgs
-
-			for (Factory neutral : neutralFactories) {
-
-				Integer[] neighbours = map[factory.entityId];
-				for (int i = 0; i < factoryCount; i++) {
-					
-					if (neighbours[i] == -1)
-						continue; // not a link
-					
-					if (neutralFactories[i] == null) // not a neutral factory
-						continue;
-					
-					if (neutralFactories[i].production == 0) // do not produce anything, avoid
-						continue;
-					
-					strBuff.append(String.format("; MOVE %d %d %d", factory.entityId, neutralFactories[i].entityId, 2));
-				}
-			}
-		}
-		
-		
 		return strBuff.toString();
 	}
 
