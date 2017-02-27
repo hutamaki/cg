@@ -19,7 +19,12 @@ class Factory {
 	}
 
 	public int rate(int distance) {
-		return production * 1000000 - distance * 1000000 - nbCyborg * 100000;
+		return production * 1000000 - distance * 1000000 - nbCyborg * 10000;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return ((Factory) obj).entityId == entityId;
 	}
 
 	@Override
@@ -28,14 +33,87 @@ class Factory {
 	}
 }
 
+class Troop {
+	int entityId;
+	int start;
+	int target;
+	int number;
+	int eta;
+
+	public Troop(int entityId, int start, int target, int number, int eta) {
+		this.entityId = entityId;
+		this.start = start;
+		this.target = target;
+		this.number = number;
+		this.eta = eta;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return ((Troop) obj).entityId == entityId;
+	}
+}
+
 enum GamePhases {
 	FIRST_STEP, RUN
+}
+
+class Cache {
+	Factory[] myFactories;
+	Factory[] neutralFactories;
+	Factory[] theirFactories;
+
+	Army their;
+	Army my;
+	
+	Troop[] myTroops;
+	Troop[] theirTroops;
+
+	void update(Player player) {
+		myFactories = player.myFactories;
+		neutralFactories = player.neutralFactories;
+		theirFactories = player.theirFactories;
+
+		my = player.my;
+		their = player.their;
+	}
+}
+
+class Army {
+	int nbFactories = 0;
+	int totalProduction = 0;
+	int availableCyborgs = 0;
+	int onTheirWayCyborgs = 0;
+	int totalCyborgs = 0;
+
+	void update(Factory[] factories) {
+		nbFactories = 0;
+		totalProduction = 0;
+		availableCyborgs = 0;
+		totalCyborgs = 0;
+
+		for (Factory fact : factories) {
+			if (fact == null)
+				continue;
+			nbFactories++;
+			totalProduction += fact.production;
+			availableCyborgs += fact.nbCyborg;
+		}
+	}
 }
 
 class Player {
 
 	int factoryCount;
 	int linkCount;
+	int nbTurns = 0;
+
+	int waitTurns = 0;
+	int waitBomb = 0;
+	Factory done = null;
+
+	int myCount = 0;
+	int theirCount = 0;
 
 	Integer[][] map; // factory1, factory2, distance
 
@@ -43,10 +121,15 @@ class Player {
 	Factory[] neutralFactories;
 	Factory[] theirFactories;
 
-	int myStartingFactory = -1;
+	Cache cache = new Cache();
+	Army my = new Army();
+	Army their = new Army();
+	
+	Troop[] myTroops;
+	Troop[] neutralTroops;	
+	Troop[] theirTroops;
 
 	GamePhases gamePhase = GamePhases.FIRST_STEP;
-	final static int MAX_NEUTRAL_CYBORG_FIRST_PHASE = 2;
 
 	Player(Scanner in) {
 		factoryCount = in.nextInt(); // the number of factories
@@ -122,8 +205,18 @@ class Player {
 	public String firstGamePhase() {
 		StringBuffer strBuff = new StringBuffer("WAIT");
 
+		// early increase
 		/*
-		 * try to conqueir neutral factories
+		 * for (Factory factory : myFactories) {
+		 * 
+		 * if (factory == null) continue; // no factory here
+		 * 
+		 * if (factory.production < 3) { factory.nbCyborg -= 10;
+		 * strBuff.append(String.format("; INC %d", factory.entityId)); } }
+		 */
+
+		/*
+		 * try to conquer neutral factories
 		 */
 		for (Factory factory : myFactories) {
 
@@ -131,39 +224,20 @@ class Player {
 				continue; // no factory here
 
 			Factory[] neutrals = sortByFitness(neutralFactories, factory);
-			Integer[] reachable = map[factory.entityId];
-
 			for (Factory neutral : neutrals) {
-
-				if (reachable[neutral.entityId] == -1)
-					continue; // not a link
 
 				if (neutral.production == 0)
 					continue;
 
-				// if (neutral.nbCyborg <= MAX_NEUTRAL_CYBORG_FIRST_PHASE) {
-				strBuff.append(
-						String.format("; MOVE %d %d %d", factory.entityId, neutral.entityId, neutral.nbCyborg + 1));
-				// }
+				if ((neutral.nbCyborg + 1) <= factory.nbCyborg) { // first game
+																	// phase we
+																	// launch it
+																	// all
+					strBuff.append(
+							String.format("; MOVE %d %d %d", factory.entityId, neutral.entityId, neutral.nbCyborg + 1));
+					factory.nbCyborg -= (neutral.nbCyborg + 1);
+				}
 			}
-
-			/*
-			 * Integer[] reachable = map[factory.entityId];
-			 * 
-			 * for (int i = 0; i < factoryCount; i++) {
-			 * 
-			 * if (reachable[i] == -1) continue; // not a link
-			 * 
-			 * if (neutralFactories[i] != null) // ok neutral factory reachable
-			 * { Factory neutral = neutralFactories[i];
-			 * 
-			 * if (neutral.production == 0) continue;
-			 * 
-			 * // if (neutral.nbCyborg <= MAX_NEUTRAL_CYBORG_FIRST_PHASE) {
-			 * strBuff.append( String.format("; MOVE %d %d %d",
-			 * factory.entityId, neutral.entityId, neutral.nbCyborg + 1)); // }
-			 * } }
-			 */
 		}
 
 		/*
@@ -174,19 +248,29 @@ class Player {
 			if (myfactory == null)
 				continue;
 
-			for (Factory factory : theirFactories) {
+			Factory[] theirsF = sortByFitness(theirFactories, myfactory);
+			for (Factory factory : theirsF) {
 
-				if (factory == null)
-					continue;
-
-				strBuff.append(String.format("; BOMB %d %d", myfactory.entityId, factory.entityId));
+				if (factory.production >= 2) {
+					strBuff.append(String.format("; BOMB %d %d", myfactory.entityId, factory.entityId));
+					waitBomb = getDistance(myfactory, factory);
+					done = factory;
+				}
 				return strBuff.toString();
 			}
 		}
+
 		return strBuff.toString();
 	}
 
 	StringBuffer selectNeutralFactory(StringBuffer strBuff) {
+
+		System.err.println("waitTurns: " + waitTurns);
+		if (waitTurns > 0) {
+			waitTurns--;
+			return strBuff;
+		}
+
 		for (Factory factory : myFactories) {
 
 			if (factory == null)
@@ -196,19 +280,15 @@ class Player {
 				continue; // no more cyborgs
 
 			Factory[] neutrals = sortByFitness(neutralFactories, factory);
-			Integer[] reachable = map[factory.entityId];
-			
 			for (Factory neutral : neutrals) {
-
-				if (reachable[neutral.entityId] == -1)
-					continue; // not a link
 
 				if (neutral.production == 0)
 					continue;
 
-				strBuff.append(
-						String.format("; MOVE %d %d %d", factory.entityId, neutralFactories[neutral.entityId].entityId,
-								Math.max(neutralFactories[neutral.entityId].nbCyborg, 2)));
+				int nbCyborgsToSend = Math.max(neutral.nbCyborg + 1, 2);
+				strBuff.append(String.format("; MOVE %d %d %d", factory.entityId, neutral.entityId, nbCyborgsToSend));
+				factory.nbCyborg -= nbCyborgsToSend;
+				waitTurns = getDistance(factory, neutral);
 				return strBuff;
 			}
 		}
@@ -216,59 +296,82 @@ class Player {
 	}
 
 	public String selectNearestNotMine() {
-
 		StringBuffer strBuff = new StringBuffer("WAIT");
-		strBuff = selectNeutralFactory(strBuff);
 
 		/*
-		 * At each turn, try to conquiert remaining neutral factories, sending 2
+		 * At each turn, try to conquer remaining neutral factories
 		 */
+		strBuff = selectNeutralFactory(strBuff);
 
 		for (Factory factory : myFactories) {
 
-			int theirs = -1; // nearest of each
-			int distance = Integer.MAX_VALUE;
-
 			if (factory == null)
 				continue; // no factory here
+
 			if (factory.nbCyborg == 0)
 				continue; // no more cyborgs
 
 			System.err.println("fact> " + factory);
 
-			Integer[] neighbours = map[factory.entityId];
-			
 			Factory[] theirsF = sortByFitness(theirFactories, factory);
-			
-			for (Factory theirFac: theirsF) {
-				if (neighbours[theirFac.entityId] == -1)
-					continue; // not a link
-				if (theirFactories[theirFac.entityId] == null)
-					continue;
-				//if (neighbours[theirFac.entityId] < distance) {
-					//distance = neighbours[theirFac.entityId];
-					// System.out.format("total from distance: %d, total: %d\n",
-					// their.getTotalFromDistance(distance),
-					// factory.nbCyborg);
-					// if (their.getTotalFromDistance(distance) <=
-					// factory.nbCyborg) {
-					theirs = theirFac.entityId;
-					break ;
-					// }
-				}			
+			for (Factory theirFac : theirsF) {
 
-			if (theirs != -1) {
-				System.err.println(theirs);
-				int dist = theirFactories[theirs].nbCyborg + 2;// theirFactories[theirs].getTotalFromDistance(distance);
-				strBuff.append(String.format("; MOVE %d %d %d", factory.entityId, theirs, dist == 0 ? 2 : dist));
+				int theirCyborgs = theirFac.nbCyborg + 2;
+				if (theirCyborgs < factory.nbCyborg) {
+					int dist = theirCyborgs + 2;// theirFactories[theirs].getTotalFromDistance(distance);
+												// // need some distance
+												// calculation here
+					strBuff.append(String.format("; MOVE %d %d %d", factory.entityId, theirFac.entityId, dist));
+					factory.nbCyborg -= theirCyborgs;
+				}
+
+				if (factory.nbCyborg == 0) { // no more cyborgs, no need ton
+												// continue
+					break;
+				}
 			}
 		}
 
+		/*
+		 * launch BOMB on enemy factory
+		 */
+
+		if (waitBomb <= 0) {
+			for (Factory myfactory : myFactories) {
+
+				if (myfactory == null)
+					continue;
+
+				Factory[] theirsF = sortByFitness(theirFactories, myfactory);
+				for (Factory factory : theirsF) {
+
+					if (done != null && factory.entityId == done.entityId) { // don't
+																				// bomb
+																				// same
+																				// twice
+						continue;
+					}
+
+					// better bomb better selecte one
+					// if (factory.production == 3) { // bomb maximum production
+					// entity @NOT TESTED
+
+					strBuff.append(String.format("; BOMB %d %d", myfactory.entityId, factory.entityId));
+					waitBomb = getDistance(myfactory, factory);
+					done = factory;
+					return strBuff.toString();
+				}
+			}
+		} else {
+			waitBomb--;
+		}
 		return strBuff.toString();
 	}
 
 	public void Run() {
+		nbTurns++;
 
+		System.err.println("turn > " + nbTurns + " <");
 		String result;
 		if (gamePhase == GamePhases.FIRST_STEP) {
 			result = firstGamePhase();
@@ -279,7 +382,24 @@ class Player {
 		System.out.println(result);
 	}
 
+	public void updateArmies() {
+		my = new Army();
+		their = new Army();
+
+		my.update(myFactories);
+		their.update(theirFactories);
+	}
+	
+	public void beginParams() {
+		cache.update(this);
+	}
+	
+	public void endParams() {
+		updateArmies();
+	}
+
 	public void upFactory(int entityId, int playerid, int nbCyborg, int production) {
+		
 		Factory factory = new Factory(entityId, nbCyborg, production);
 		System.err.format("playerid= %d > %s\n", playerid, factory);
 
@@ -299,6 +419,11 @@ class Player {
 			break;
 		}
 	}
+	
+	public void upTroop(int entityId, int playerId, int start, int target, int number, int eta) {		
+		Troop troop = new Troop(entityId, start, target, number, eta);
+		
+	}
 
 	public static void main(String args[]) {
 		Scanner in = new Scanner(System.in);
@@ -306,6 +431,9 @@ class Player {
 
 		// game loop
 		while (true) {
+			
+			player.beginParams();
+			
 			int entityCount = in.nextInt(); // the number of entities (e.g.
 											// factories and troops)
 			for (int i = 0; i < entityCount; i++) {
@@ -313,7 +441,7 @@ class Player {
 				String entityType = in.next();
 
 				if (entityType.equals("FACTORY")) {
-					int arg1 = in.nextInt(); // joueur qui possÃ¨de l'usine : 1
+					int arg1 = in.nextInt(); // joueur qui possède l'usine : 1
 												// pour vous, -1 pour
 												// l'adversaire et 0 si neutre
 					int arg2 = in.nextInt(); // nombre de cyborgs dans l'usine
@@ -324,24 +452,22 @@ class Player {
 					player.upFactory(entityId, arg1, arg2, arg3);
 
 				} else { // means "TROOP"
-					int arg1 = in.nextInt(); // joueur qui possÃ¨de la troupe : 1
+					int arg1 = in.nextInt(); // joueur qui possède la troupe : 1
 												// pour vous, -1 pour
 												// l'adversaire
-					int arg2 = in.nextInt(); // identifiant de l'usine de dÃ©part
-					int arg3 = in.nextInt(); // identifiant de l'usine d'arrivÃ©e
+					int arg2 = in.nextInt(); // identifiant de l'usine de départ
+					int arg3 = in.nextInt(); // identifiant de l'usine d'arrivée
 					int arg4 = in.nextInt(); // nombre de cyborgs au sein de la
 												// troupe (entier strictement
 												// positif)
 					int arg5 = in.nextInt(); // nombre de tours avant d'arriver
-												// Ã  destination (entier
+												// à destination (entier
 												// strictement positif)
 				}
-			}
+			}			
+			player.endParams();
+			
 			player.Run();
-
-			// Any valid action, such as "WAIT" or "MOVE source destination
-			// cyborgs"
-			// System.out.println("WAIT");
 		}
 	}
 }
