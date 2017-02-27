@@ -52,6 +52,11 @@ class Troop {
 	public boolean equals(Object obj) {
 		return ((Troop) obj).entityId == entityId;
 	}
+	
+	@Override
+	public String toString() {
+		return String.format("troop: id= %d, start= %d, end= %d, number= %d, eta= %d", entityId, start, target, number, eta);
+	}
 }
 
 enum GamePhases {
@@ -65,17 +70,22 @@ class Cache {
 
 	Army their;
 	Army my;
-	
+
 	Troop[] myTroops;
-	Troop[] theirTroops;
+	Troop[] neutralTroops;
+	Troop[] theirTroops;	
 
 	void update(Player player) {
 		myFactories = player.myFactories;
 		neutralFactories = player.neutralFactories;
 		theirFactories = player.theirFactories;
+		
+		myTroops = player.myTroops;
+		neutralTroops = player.neutralTroops;
+		theirTroops = player.theirTroops;
 
 		my = player.my;
-		their = player.their;
+		their = player.their;			
 	}
 }
 
@@ -86,7 +96,7 @@ class Army {
 	int onTheirWayCyborgs = 0;
 	int totalCyborgs = 0;
 
-	void update(Factory[] factories) {
+	void update(Factory[] factories, Troop[] troops) {
 		nbFactories = 0;
 		totalProduction = 0;
 		availableCyborgs = 0;
@@ -99,6 +109,20 @@ class Army {
 			totalProduction += fact.production;
 			availableCyborgs += fact.nbCyborg;
 		}
+		
+		for (Troop troop : troops) {
+			if (troop == null)
+				continue;
+			onTheirWayCyborgs += troop.number;			
+		}
+		
+		totalCyborgs = availableCyborgs + onTheirWayCyborgs;
+	}
+	
+	@Override
+	public String toString() {
+		return String.format("army: nbFactories= %d, totapProduction= %d, available= %d, way= %d, total= %d", 
+				nbFactories, totalProduction, availableCyborgs, onTheirWayCyborgs, totalCyborgs);
 	}
 }
 
@@ -124,9 +148,9 @@ class Player {
 	Cache cache = new Cache();
 	Army my = new Army();
 	Army their = new Army();
-	
+
 	Troop[] myTroops;
-	Troop[] neutralTroops;	
+	Troop[] neutralTroops;
 	Troop[] theirTroops;
 
 	GamePhases gamePhase = GamePhases.FIRST_STEP;
@@ -386,24 +410,35 @@ class Player {
 		my = new Army();
 		their = new Army();
 
-		my.update(myFactories);
-		their.update(theirFactories);
+		my.update(myFactories, myTroops);
+		their.update(theirFactories, theirTroops);
 	}
-	
-	public void beginParams() {
+
+	public void beginParams(int entityCount) {
 		cache.update(this);
+		
+		myFactories = new Factory[entityCount];
+		theirFactories = new Factory[entityCount];
+		neutralFactories = new Factory[entityCount];
+		
+		myTroops = new Troop[entityCount];
+		theirTroops = new Troop[entityCount];
+		neutralTroops = new Troop[entityCount];		
 	}
-	
+
 	public void endParams() {
-		updateArmies();
+		
+		updateArmies(); // update troops in player
+		
+		// once it has been done, we can 
 	}
 
 	public void upFactory(int entityId, int playerid, int nbCyborg, int production) {
+
 		
 		Factory factory = new Factory(entityId, nbCyborg, production);
-		System.err.format("playerid= %d > %s\n", playerid, factory);
+		System.err.format("playerid= %d > factory: %s\n", playerid, factory);
 
-		myFactories[entityId] = theirFactories[entityId] = neutralFactories[entityId] = null;
 		switch (playerid) {
 		case 1: {
 			myFactories[entityId] = factory;
@@ -419,10 +454,26 @@ class Player {
 			break;
 		}
 	}
-	
-	public void upTroop(int entityId, int playerId, int start, int target, int number, int eta) {		
+
+	public void upTroop(int entityId, int playerId, int start, int target, int number, int eta) {
 		Troop troop = new Troop(entityId, start, target, number, eta);
-		
+		System.err.format("playerid= %d > %s\n", playerId, troop);
+
+		myTroops[entityId] = theirTroops[entityId] = neutralTroops[entityId] = null;
+		switch (playerId) {
+		case 1: {
+			myTroops[entityId] = troop;
+		}
+			break;
+		case 0: {
+			neutralTroops[entityId] = troop;
+		}
+			break;
+		case -1: {
+			theirTroops[entityId] = troop;
+		}
+			break;
+		}
 	}
 
 	public static void main(String args[]) {
@@ -431,17 +482,15 @@ class Player {
 
 		// game loop
 		while (true) {
-			
-			player.beginParams();
-			
 			int entityCount = in.nextInt(); // the number of entities (e.g.
 											// factories and troops)
+			player.beginParams(entityCount);			
 			for (int i = 0; i < entityCount; i++) {
 				int entityId = in.nextInt();
 				String entityType = in.next();
 
 				if (entityType.equals("FACTORY")) {
-					int arg1 = in.nextInt(); // joueur qui possède l'usine : 1
+					int arg1 = in.nextInt(); // joueur qui possï¿½de l'usine : 1
 												// pour vous, -1 pour
 												// l'adversaire et 0 si neutre
 					int arg2 = in.nextInt(); // nombre de cyborgs dans l'usine
@@ -452,21 +501,22 @@ class Player {
 					player.upFactory(entityId, arg1, arg2, arg3);
 
 				} else { // means "TROOP"
-					int arg1 = in.nextInt(); // joueur qui possède la troupe : 1
+					int arg1 = in.nextInt(); // joueur qui possï¿½de la troupe : 1
 												// pour vous, -1 pour
 												// l'adversaire
-					int arg2 = in.nextInt(); // identifiant de l'usine de départ
-					int arg3 = in.nextInt(); // identifiant de l'usine d'arrivée
+					int arg2 = in.nextInt(); // identifiant de l'usine de dï¿½part
+					int arg3 = in.nextInt(); // identifiant de l'usine d'arrivï¿½e
 					int arg4 = in.nextInt(); // nombre de cyborgs au sein de la
 												// troupe (entier strictement
 												// positif)
 					int arg5 = in.nextInt(); // nombre de tours avant d'arriver
-												// à destination (entier
+												// ï¿½ destination (entier
 												// strictement positif)
+					player.upTroop(entityId, arg1, arg2, arg3, arg4, arg5);
 				}
-			}			
+			}
 			player.endParams();
-			
+
 			player.Run();
 		}
 	}
