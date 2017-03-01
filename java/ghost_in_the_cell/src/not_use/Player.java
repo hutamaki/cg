@@ -1,9 +1,12 @@
+
+package not_use;
+
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Scanner;
 import java.util.Vector;
 
-import sun.security.mscapi.KeyStore.MY;
 
 class Factory {
 	public int entityId;
@@ -54,10 +57,11 @@ class Troop {
 	public boolean equals(Object obj) {
 		return ((Troop) obj).entityId == entityId;
 	}
-	
+
 	@Override
 	public String toString() {
-		return String.format("troop: id= %d, start= %d, end= %d, number= %d, eta= %d", entityId, start, target, number, eta);
+		return String.format("troop: id= %d, start= %d, end= %d, number= %d, eta= %d", entityId, start, target, number,
+				eta);
 	}
 }
 
@@ -73,21 +77,21 @@ class Cache {
 	Army their;
 	Army my;
 
-	Troop[] myTroops;
-	Troop[] neutralTroops;
-	Troop[] theirTroops;	
+	Vector<Troop> myTroops;
+	Vector<Troop> neutralTroops;
+	Vector<Troop> theirTroops;
 
 	void update(Player player) {
 		myFactories = player.myFactories;
 		neutralFactories = player.neutralFactories;
 		theirFactories = player.theirFactories;
-		
+
 		myTroops = player.myTroops;
 		neutralTroops = player.neutralTroops;
 		theirTroops = player.theirTroops;
 
 		my = player.my;
-		their = player.their;			
+		their = player.their;
 	}
 }
 
@@ -98,7 +102,7 @@ class Army {
 	int onTheirWayCyborgs = 0;
 	int totalCyborgs = 0;
 
-	void update(Factory[] factories, Troop[] troops) {
+	void update(Factory[] factories, Vector<Troop> troops) {
 		nbFactories = 0;
 		totalProduction = 0;
 		availableCyborgs = 0;
@@ -111,19 +115,19 @@ class Army {
 			totalProduction += fact.production;
 			availableCyborgs += fact.nbCyborg;
 		}
-		
+
 		for (Troop troop : troops) {
 			if (troop == null)
 				continue;
-			onTheirWayCyborgs += troop.number;			
+			onTheirWayCyborgs += troop.number;
 		}
-		
+
 		totalCyborgs = availableCyborgs + onTheirWayCyborgs;
 	}
-	
+
 	@Override
 	public String toString() {
-		return String.format("army: nbFactories= %d, totapProduction= %d, available= %d, way= %d, total= %d", 
+		return String.format("army: nbFactories= %d, totapProduction= %d, available= %d, way= %d, total= %d",
 				nbFactories, totalProduction, availableCyborgs, onTheirWayCyborgs, totalCyborgs);
 	}
 }
@@ -146,14 +150,16 @@ class Player {
 	Factory[] myFactories;
 	Factory[] neutralFactories;
 	Factory[] theirFactories;
+	
+	Factory[] alltheirsFactories;
 
 	Cache cache = new Cache();
 	Army my = new Army();
 	Army their = new Army();
 
-	Troop[] myTroops;
-	Troop[] neutralTroops;
-	Troop[] theirTroops;
+	Vector<Troop> myTroops;
+	Vector<Troop> neutralTroops;
+	Vector<Troop> theirTroops;
 
 	GamePhases gamePhase = GamePhases.FIRST_STEP;
 
@@ -310,7 +316,7 @@ class Player {
 		}
 		return strBuff;
 	}
-	
+
 	class Triple<U> implements Comparable<Triple<U>> {
 		int rating;
 		U item1;
@@ -324,11 +330,11 @@ class Player {
 
 		@Override
 		public int compareTo(Triple<U> value) {
-			return value.rating - this.rating;
+			return rating - value.rating;
 		}
 	}
-	
-	int troopsOnWayTarget(Factory t, int distance, Troop[] troops) {
+
+	int troopsOnWayTarget(Factory t, int distance, Vector<Troop> troops) {
 		int acc = 0;
 		for (Troop troop : troops) {
 			if (troop.target == t.entityId && troop.eta <= distance) {
@@ -337,63 +343,131 @@ class Player {
 		}
 		return acc;
 	}
-	
-	public String battleFrontStrat() {
-		
-		Vector<Troop> troopT = new Vector<>();		
-		StringBuffer strBuff = new StringBuffer("WAIT");
+
+	public void battleProtect(Vector<Factory> needProtection) {
+		for (Factory my : myFactories) {
+			
+			if (my == null) {
+				continue ;
+			}
+			
+			int risk = my.nbCyborg;
+			int maxDistance = 0;
+			for (Troop tp : theirTroops) {
+				if (tp.target == my.entityId) {
+					// we are attacked
+					risk -= tp.number;
+					if (tp.eta > maxDistance) {
+						maxDistance = tp.eta;
+					}
+				}
+			}
+			// adjust by production
+			risk += maxDistance * my.production;
+
+			if (risk < 0) {
+				needProtection.addElement(my);
+			}
+		}
+	}
+
+	public void battleAttack(StringBuffer strBuff, Vector<Factory> needProtection) {
 
 		/*
-		 *  compute sending order ie minimize distance(x, enemy)
+		 * compute sending order ie minimize distance(x, enemy)
 		 */
 		int myCount = 0;
-		Vector<Triple<Factory>> byDistance = new Vector<>(); 
+		Vector<Triple<Factory>> byDistance = new Vector<>();
 		for (Factory myFact : myFactories) {
-			if (myFact == null) continue;
+			if (myFact == null)
+				continue;
+		
+			boolean needz = false;
+			for (Factory need: needProtection) {
+				if (need.entityId == myFact.entityId) {
+					needz = true;
+				}
+			}
+			
+			if (needz == true) {
+				continue;
+			}
+			
 			myCount++;
-			for (Factory their : theirFactories) {
-				if (their == null) continue;
-				int distance = getDistance(myFact, their); // or neutral
-				byDistance.add(new Triple<Factory>(distance, myFact, their));				
+			for (Factory their : alltheirsFactories) {
+				if (their == null)
+					continue;
+				int distance = getDistance(myFact, their); // or neutral				
+				byDistance.add(new Triple<Factory>(their.rate(distance), myFact, their));
 			}
 		}
 		Collections.sort(byDistance);
-		
+
+		System.err.println("blind ! : " + byDistance.size());
+
+		Vector<Troop> troopT = new Vector<>();
 		/*
 		 * attack from 50% of factories, others are for reloading
 		 */
-		//int nbFactories_to_attack = myCount / 2; // maybe, maybe not, now blind !
-		for (Triple<Factory> triple : byDistance) {			
+		// int nbFactories_to_attack = myCount / 2; // maybe, maybe not, now
+		// blind !
+		for (Triple<Factory> triple : byDistance) {
+
+
 			
 			Factory factory = triple.item1;
 			Factory their = triple.item2;
 			int distance = triple.rating;
 			
+			System.err.println(String.format("considering: %d -> %d / rating: %d\n", factory.entityId, their.entityId, triple.rating)); 
+
 			if (factory.nbCyborg == 0)
 				continue; // no more cyborgs
-			
+
 			// compute how many troops to send
 			int nbToSend = their.nbCyborg + their.production * distance + 1;
-			nbToSend += troopsOnWayTarget(their, distance, theirTroops); // add moving troops if any
+			nbToSend += troopsOnWayTarget(their, distance, theirTroops); // add
+																			// moving
+																			// troops
+																			// if
+																			// any
 			nbToSend -= troopsOnWayTarget(their, distance, myTroops);
-			
+
 			// adjust by already sent
 			for (Troop already : troopT) {
 				if (already.target == their.entityId) {
 					nbToSend -= already.number;
 				}
 			}
-			
-			if (factory.nbCyborg > nbToSend) { // not really cold we could check on sum of 3 nearest for instance
-				//int realSend = Math.min(factory.nbCyborg, nbToSend);
+
+			if (factory.nbCyborg > nbToSend && nbToSend > 0) { // not really cold we could check
+												// on sum of 3 nearest for
+												// instance
+				// int realSend = Math.min(factory.nbCyborg, nbToSend);
 				troopT.add(new Troop(-1, factory.entityId, their.entityId, nbToSend, distance));
 				strBuff.append(String.format("; MOVE %d %d %d", factory.entityId, their.entityId, nbToSend));
+			} else {
+				System.err.println(String.format("not enough troops for: %d -> %d\n", factory.entityId, their.entityId)); 
 			}
 		}
+	}
+	
+	public void sendReinforcements(StringBuffer strBuff) {
 		
+	}
+
+	public String battleFrontStrat() {
+
+		// who needs immediate protection ?
+		Vector<Factory> needProtection = new Vector<>();
+		battleProtect(needProtection);
+
+		StringBuffer strBuff = new StringBuffer("WAIT");
+		battleAttack(strBuff, needProtection);
+
 		/*
 		 * compute reinforcement order ie minimize distance (my, reinforcement)
-		 */
+	/*	 
 		for (Factory factory : myFactories) {
 			if (factory == null)
 				continue; // no factory here
@@ -403,7 +477,7 @@ class Player {
 
 			System.err.println("fact> " + factory);
 
-			Factory[] theirsF = sortByFitness(theirFactories, factory);
+			Factory[] theirsF = sortByFitness(alltheirsFactories, factory);
 			for (Factory theirFac : theirsF) {
 
 				int theirCyborgs = theirFac.nbCyborg + 2;
@@ -414,13 +488,12 @@ class Player {
 					strBuff.append(String.format("; MOVE %d %d %d", factory.entityId, theirFac.entityId, dist));
 					factory.nbCyborg -= theirCyborgs;
 				}
-				
+
 				// heuristic here, each factory attacks only one other
-				
-				}
+
 			}
-		}
-		
+		}*/
+
 		strBuff = selectNeutralFactory(strBuff);
 
 		/*
@@ -442,6 +515,8 @@ class Player {
 																				// twice
 						continue;
 					}
+					
+					
 
 					// better bomb better selecte one
 					// if (factory.production == 3) { // bomb maximum production
@@ -453,6 +528,9 @@ class Player {
 					return strBuff.toString();
 				}
 			}
+			
+
+			
 		} else {
 			waitBomb--;
 		}
@@ -488,14 +566,14 @@ class Player {
 					strBuff.append(String.format("; MOVE %d %d %d", factory.entityId, theirFac.entityId, dist));
 					factory.nbCyborg -= theirCyborgs;
 				}
-				
+
 				// heuristic here, each factory attacks only one other
-				
-				}
+
 			}
 		}
-		
-		strBuff = selectNeutralFactory(strBuff);
+
+
+	strBuff= selectNeutralFactory(strBuff);
 
 		/*
 		 * launch BOMB on enemy factory
@@ -542,7 +620,8 @@ class Player {
 			result = firstGamePhase();
 			gamePhase = GamePhases.RUN;
 		} else {
-			result = selectNearestNotMine();
+			//result = selectNearestNotMine();
+			result = battleFrontStrat();
 		}
 		System.out.println(result);
 	}
@@ -557,40 +636,42 @@ class Player {
 
 	public void beginParams(int entityCount) {
 		cache.update(this);
-		
+
 		myFactories = new Factory[entityCount];
 		theirFactories = new Factory[entityCount];
 		neutralFactories = new Factory[entityCount];
-		
-		myTroops = new Troop[entityCount];
-		theirTroops = new Troop[entityCount];
-		neutralTroops = new Troop[entityCount];		
+		alltheirsFactories = new Factory[entityCount];
+
+		myTroops = new Vector<>();
+		theirTroops = new Vector<>();
+		neutralTroops = new Vector<>();
 	}
 
 	public void endParams() {
-		
+
 		updateArmies(); // update troops in player
-		
-		// once it has been done, we can 
+
+		// once it has been done, we can
 	}
 
 	public void upFactory(int entityId, int playerid, int nbCyborg, int production) {
 
-		
 		Factory factory = new Factory(entityId, nbCyborg, production);
 		System.err.format("playerid= %d > factory: %s\n", playerid, factory);
 
 		switch (playerid) {
 		case 1: {
-			myFactories[entityId] = factory;
+			myFactories[entityId] = factory;			
 		}
 			break;
 		case 0: {
 			neutralFactories[entityId] = factory;
+			alltheirsFactories[entityId] = factory;
 		}
 			break;
 		case -1: {
 			theirFactories[entityId] = factory;
+			alltheirsFactories[entityId] = factory;
 		}
 			break;
 		}
@@ -598,20 +679,19 @@ class Player {
 
 	public void upTroop(int entityId, int playerId, int start, int target, int number, int eta) {
 		Troop troop = new Troop(entityId, start, target, number, eta);
-		System.err.format("playerid= %d > %s\n", playerId, troop);
+		System.err.format("playerid= %d > %s\n", playerId, troop);		
 
-		myTroops[entityId] = theirTroops[entityId] = neutralTroops[entityId] = null;
 		switch (playerId) {
 		case 1: {
-			myTroops[entityId] = troop;
+			myTroops.add(troop);
 		}
 			break;
 		case 0: {
-			neutralTroops[entityId] = troop;
+			neutralTroops.add(troop);
 		}
 			break;
 		case -1: {
-			theirTroops[entityId] = troop;
+			theirTroops.add(troop);
 		}
 			break;
 		}
@@ -625,7 +705,7 @@ class Player {
 		while (true) {
 			int entityCount = in.nextInt(); // the number of entities (e.g.
 											// factories and troops)
-			player.beginParams(entityCount);			
+			player.beginParams(entityCount);
 			for (int i = 0; i < entityCount; i++) {
 				int entityId = in.nextInt();
 				String entityType = in.next();
