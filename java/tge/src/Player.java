@@ -41,24 +41,7 @@ interface Astarable<T> {
 	int getDistanceFromGoal(Node<T> current);
 }
 
-class Astar<T> implements Runnable {
-	private PriorityQueue<Node<T>> openList;
-	private Vector<Node<T>> closeList = new Vector<>();
-	private Astarable<T> astarable;
-
-	public Astar(int initialCapacity, Astarable<T> astarable) {
-		openList = new PriorityQueue<>(initialCapacity, new Comparator<Node<T>>() {
-			@Override
-			public int compare(Node<T> arg0, Node<T> arg1) {
-				return arg0.f - arg1.f;
-			}
-		});
-		this.astarable = astarable;
-	}
-
-	void start(Node<T> startingPoint) {
-		openList.add(startingPoint);
-	}
+class Astar<T> {
 
 	/**
 	 * successor is interesting whenever it is not present or if its f is below
@@ -78,7 +61,7 @@ class Astar<T> implements Runnable {
 		return true;
 	}
 
-	boolean considerWorthTrying(Node<T> successor) {
+	boolean considerWorthTrying(Node<T> successor, PriorityQueue<Node<T>> openList, Vector<Node<T>> closeList) {
 		if (!removeIfPresentAndLess(openList, successor)) {
 			return false;
 		}
@@ -88,8 +71,18 @@ class Astar<T> implements Runnable {
 		return true;
 	}
 
-	@Override
-	public void run() {
+	public Node<T> search(int initialCapacity, Astarable<T> astarable, Node<T> start, Node<T> goal) {
+		
+		PriorityQueue<Node<T>>  openList = new PriorityQueue<>(initialCapacity, new Comparator<Node<T>>() {
+			@Override
+			public int compare(Node<T> arg0, Node<T> arg1) {
+				return arg0.f - arg1.f;
+			}
+		});
+
+		Vector<Node<T>> closeList = new Vector<>();
+		openList.add(start);
+		
 		while (!openList.isEmpty()) {
 			Node<T> current = openList.poll();
 			Vector<Node<T>> successors = astarable.getSuccessors(current);
@@ -97,18 +90,19 @@ class Astar<T> implements Runnable {
 
 				if (astarable.isGoal(successor)) {
 					successor.parent = current;
-					break;
+					return successor;
 				}
 				successor.g = current.g + astarable.getDistance(current, successor);
 				successor.h = astarable.getDistanceFromGoal(successor);
 				successor.f = successor.g + successor.h;
 
-				if (considerWorthTrying(successor)) {
+				if (considerWorthTrying(successor, openList, closeList)) {
 					openList.add(successor);
 				}
 			}
 			closeList.add(current);
 		}
+		return null; // means no path
 	}
 }
 
@@ -124,7 +118,7 @@ class Unit {
 		this.x = x;
 		this.y = y;
 
-		hashCode = y << 16 + x;
+		hashCode = (y << 16) + x;
 	}
 
 	@Override
@@ -232,6 +226,10 @@ class Board {
 	}
 }
 
+
+/**
+ * A Star customization
+ */
 class PathFinding implements Astarable<Unit> {
 
 	Game game;
@@ -253,7 +251,7 @@ class PathFinding implements Astarable<Unit> {
 	}
 
 	@Override
-	public boolean isGoal(Node<Unit> node) { // goal hardcoded for every player
+	public boolean isGoal(Node<Unit> node) { // goal hard-coded for every player
 		switch (playerId) {
 		case 0:
 			return node.value.x == (game.board.width - 1);
@@ -390,6 +388,7 @@ class Game {
 				return isBlocked(from.x + 1, from.y, from.x + 1, from.y - 1, true);
 			} else { // RIGHT
 				// V (x,y)(x,y-1)
+				System.err.println("here");
 				return isBlocked(from.x, from.y, from.x, from.y - 1, true);
 			}
 		}
@@ -431,6 +430,7 @@ class Player {
 			}
 
 			Dragoon me = game.getMe();
+			System.err.format("dragoon position: (%d,%d)\n", me.x, me.y);
 			Unit[] possibleMoves = game.board.getMoves(me);
 
 			System.err.format("possible moves: %d\n", possibleMoves.length);
