@@ -42,6 +42,12 @@ interface Astarable<T> {
 }
 
 class Astar<T> {
+	
+	private int capacity = 0;
+	
+	Astar(int initialCapacity) {
+		this.capacity = initialCapacity; 
+	}
 
 	/**
 	 * successor is interesting whenever it is not present or if its f is below
@@ -71,9 +77,11 @@ class Astar<T> {
 		return true;
 	}
 
-	public Node<T> search(int initialCapacity, Astarable<T> astarable, Node<T> start, Node<T> goal) {
+	public Node<T> search(Astarable<T> astarable, T start) {
 		
-		PriorityQueue<Node<T>>  openList = new PriorityQueue<>(initialCapacity, new Comparator<Node<T>>() {
+		Node<T> nodeStart = new Node<>(start); 
+		
+		PriorityQueue<Node<T>>  openList = new PriorityQueue<>(capacity, new Comparator<Node<T>>() {
 			@Override
 			public int compare(Node<T> arg0, Node<T> arg1) {
 				return arg0.f - arg1.f;
@@ -81,15 +89,15 @@ class Astar<T> {
 		});
 
 		Vector<Node<T>> closeList = new Vector<>();
-		openList.add(start);
+		openList.add(nodeStart);
 		
 		while (!openList.isEmpty()) {
 			Node<T> current = openList.poll();
 			Vector<Node<T>> successors = astarable.getSuccessors(current);
 			for (Node<T> successor : successors) {
-
+				
+				successor.parent = current;
 				if (astarable.isGoal(successor)) {
-					successor.parent = current;
 					return successor;
 				}
 				successor.g = current.g + astarable.getDistance(current, successor);
@@ -103,6 +111,15 @@ class Astar<T> {
 			closeList.add(current);
 		}
 		return null; // means no path
+	}
+	
+	Vector<T> getPath(Node<T> path) {
+		Vector<T> vect = new Vector<>();
+		while (path != null) {
+			vect.insertElementAt(path.value, 0);
+			path = path.parent;
+		}
+		return vect;
 	}
 }
 
@@ -218,6 +235,34 @@ class Board {
 				units.toArray(tmpArray);
 				moves.put(new Unit(x, y), tmpArray);
 			}
+		}
+	}
+	
+	private void discardLink(Unit key, Unit value) {	// not not not optimized, could be a problem
+		Unit[] units = moves.get(key);
+		Vector<Unit> result = new Vector<>();
+		for (Unit unit : units) {
+			if (!unit.equals(value)) {
+				result.add(unit);
+			}
+		}
+		Unit[] tmpArray = new Unit[result.size()];
+		result.toArray(tmpArray);
+		moves.put(key, tmpArray);
+	}
+	
+	private void removeConnections(Unit from, Unit to) { 
+		discardLink(from, to);
+		discardLink(to, from);
+	}
+	
+	public void updateBoard(int x, int y, char orientation) {
+		if (orientation == 'V') {
+			removeConnections(new Unit(x, y), new Unit(x - 1, y));
+			removeConnections(new Unit(x, y + 1), new Unit(x - 1, y + 1));
+		} else {
+			removeConnections(new Unit(x, y), new Unit(x, y - 1));
+			removeConnections(new Unit(x + 1, y), new Unit(x + 1, y - 1));
 		}
 	}
 
@@ -340,58 +385,18 @@ class Game {
 		} else { // already a wall, just a new orientation
 			walls.get(key).enableOrientation(orientation);
 		}
+		
+		board.updateBoard(x, y, orientation);
 	}
-
+	
 	/**
-	 * returns if a wall blocks the way, given supposed walls coordinates there
-	 * are two coordinates, since walls are 2 cases-length
+	 * Return a direction given the current position and the next
 	 */
-	public boolean isBlocked(int a, int b, int c, int d, boolean V) {
-		Wall[] wallsToCheck = { walls.get(new Unit(a, b)), walls.get(new Unit(c, d)) };
-		for (Wall wall : wallsToCheck) {
-			if (wall == null) { // there is a wall
-				continue;
-			}
-			if (V) { // check if vertical & wall is vertical
-				if (wall.V) {
-					return true;
-				}
-			} else {
-				if (wall.H) {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
-	/**
-	 * Returns true if the movement from from to to is valid, false otherwise
-	 */
-	public boolean isNextMoveValid(Unit from, Unit to) {
-		int dx = to.x - from.x;
-		int dy = to.y - from.y;
-
-		if (dx == 0) {
-			if (dy < 0) { // UP
-				// H (x,y)(x-1,y)
-				return isBlocked(from.x, from.y, from.x - 1, from.y, false); // false
-																				// means
-																				// H
-			} else {
-				// H (x,y-1)(x-1,y-1)
-				return isBlocked(from.x, from.y - 1, from.x - 1, from.y - 1, false);
-			}
-		} else { // implies dy == 0
-			if (dx < 0) { // LEFT
-				// V (x+1,y)(x+1,y-1)
-				return isBlocked(from.x + 1, from.y, from.x + 1, from.y - 1, true);
-			} else { // RIGHT
-				// V (x,y)(x,y-1)
-				System.err.println("here");
-				return isBlocked(from.x, from.y, from.x, from.y - 1, true);
-			}
-		}
+	public String getDirection(Unit current, Unit next) {
+		if (current.x < next.x) return "RIGHT";
+		if (current.x > next.x) return "LEFT";
+		if (current.y < next.y) return "DOWN";
+		return "UP";
 	}
 }
 
@@ -409,6 +414,8 @@ class Player {
 
 		Board board = new Board(w, h); // generate possible moves
 		Game game = new Game(board, playerCount, myId);
+		Astarable<Unit> myPath = new PathFinding(game, myId);
+		Astar<Unit> astar = new Astar<>(w * h);
 
 		// game loop
 		while (true) {
@@ -426,22 +433,15 @@ class Player {
 				int wallY = in.nextInt(); // y-coordinate of the wall
 				String wallOrientation = in.next(); // wall orientation ('H' or
 													// 'V')
-				game.setWall(wallX, wallY, wallOrientation.charAt(0));
+				game.setWall(wallX, wallY, wallOrientation.charAt(0));				
 			}
 
 			Dragoon me = game.getMe();
 			System.err.format("dragoon position: (%d,%d)\n", me.x, me.y);
-			Unit[] possibleMoves = game.board.getMoves(me);
-
-			System.err.format("possible moves: %d\n", possibleMoves.length);
-			for (Unit move : possibleMoves) {
-				System.err.format("%s => %b\n", move, game.isNextMoveValid(me, move));
-			}
-			if (game.myId == 0) {
-				System.out.println("RIGHT");
-			} else
-				System.out.println("LEFT");
-
+			
+			Node<Unit> way = astar.search(myPath, me);
+			Vector<Unit> path = astar.getPath(way);
+			System.out.println(game.getDirection(me, path.elementAt(1)));			
 		}
 	}
 }
