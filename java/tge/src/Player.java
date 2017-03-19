@@ -380,10 +380,14 @@ class OptimizedBoard {
 		return moves[getUnit(x, y).MoveIndex() + towards] != NO_MOVE;
 	}
 
-	public boolean isWallPossible(int x, int y, char orientation, Unit current, Astarable<Unit> astarable) {
+	public boolean isWallPossible(int x, int y, char orientation, Dragoon[] dragoons,
+			HashMap<Integer, Astarable<Unit>> pathes) {
 		System.err.println("isWallPossible: " + x + ", " + y + " o=" + orientation);
 		boolean isWallPlacable = true;
 		if (orientation == 'V') {
+			System.err.println("isLink(left1) => " + isLink(x, y, LEFT));
+			System.err.println("isLink(left2) => " + isLink(x, y + 1, LEFT));
+			System.err.println("isLink(down) => " + isLink(x, y, DOWN));
 			isWallPlacable = (isLink(x, y, LEFT) && isLink(x, y + 1, LEFT) && isLink(x, y, DOWN));
 		} else {
 			isWallPlacable = (isLink(x, y, UP) && isLink(x + 1, y, UP) && isLink(x + 1, y, LEFT));
@@ -395,11 +399,18 @@ class OptimizedBoard {
 
 		int[] backup = backUpMoves();
 		updateBoard(x, y, orientation);
-		boolean isExit = dfs.search(astarable, current, nb_total) != null;
-		System.err.println("isExit: " + isExit);
-		moves = backup;
 
-		return isExit;
+		for (Entry<Integer, Astarable<Unit>> entry : pathes.entrySet()) {
+			Node<Unit> way = dfs.search(entry.getValue(), dragoons[entry.getKey()], nb_total);
+			if (way == null) {
+				isWallPlacable = false;
+				break;
+			}
+		}
+
+		System.err.println("isExit: " + isWallPlacable);
+		moves = backup;
+		return isWallPlacable;
 	}
 
 	private int[] backUpMoves() {
@@ -435,7 +446,7 @@ class PathFinding implements Astarable<Unit> {
 	public PathFinding(Game game, int playerId) {
 		this.game = game;
 		this.playerId = playerId;
-		
+
 		goal = game.defineGoal(this.playerId);
 	}
 
@@ -466,7 +477,7 @@ class PathFinding implements Astarable<Unit> {
 	@Override
 	public int getDistanceFromGoal(Node<Unit> current) {
 		if (goal.y == -1) { // means it's an X-goal
-			return Math.abs(goal.x - current.value.x );
+			return Math.abs(goal.x - current.value.x);
 		}
 		return Math.abs(goal.y - current.value.y);
 	}
@@ -529,9 +540,9 @@ class Game {
 
 	public void setPlayer(int index, Dragoon dragoon) {
 		dragoons[index] = dragoon;
-		if (dragoon.isDead() && (allStarables.get(index) != null)) { 
+		if (dragoon.isDead() && (allStarables.get(index) != null)) {
 			// if player is dead removed it from players map
-			allStarables.remove(index);			
+			allStarables.remove(index);
 			System.err.println("removed: " + index);
 		}
 	}
@@ -569,7 +580,7 @@ class Game {
 	public void guruMeditation() {
 
 		pathes.clear();
-		
+
 		// simple idea: if myPath > other path, i need to stop him using block
 		for (Entry<Integer, Astarable<Unit>> entry : allStarables.entrySet()) {
 			System.err.format("dragoon %d> => %s\n", entry.getKey(), getDragoon(entry.getKey()));
@@ -580,16 +591,16 @@ class Game {
 		int myPathLength = pathes.get(myId).x;
 		int id = myId;
 		int myx = myPathLength;
-		
+
 		if (myId != 0) {
-		    myx += 1;
+			myx += 1;
 		}
 
 		System.err.println("current position: " + getMe());
-		/*
-		 * Vector<Unit> pathx = astar.getPath(pathes.get(myId)); for (Unit unit
-		 * : pathx) { System.err.println("=> " + unit); }
-		 */
+		Vector<Unit> pathz = astar.getPath(pathes.get(myId));
+		for (Unit unit : pathz) {
+			System.err.println("=> " + unit);
+		}
 
 		// get the player that is in position to win
 		for (Entry<Integer, Node<Unit>> entry : pathes.entrySet()) {
@@ -601,22 +612,28 @@ class Game {
 				}
 			}
 		}
-		
-		
-		 Vector<Unit> pathy = astar.getPath(pathes.get(2)); 
-		 for (Unit unit : pathy) { System.err.println("=> " + unit); }
 
-		if ((id != myId) && (getMe().wallsLeft > 0) && (myx <= 3)) { // find were to put wall if
-													// we need to block someone
+		Vector<Unit> pathy = astar.getPath(pathes.get(2));
+		for (Unit unit : pathy) {
+			System.err.println("=> " + unit);
+		}
 
-			System.err.println("attacking :"  + id + "myx: " + myx);
-            Astarable<Unit> pathfinding = allStarables.get(id);
-            
-    		
-    		 Vector<Unit> pathx = astar.getPath(pathes.get(id)); 
-    		 for (Unit unit : pathx) { System.err.println("=> " + unit); }
-    		 
-            
+		if ((id != myId) && (getMe().wallsLeft > 0) && (myx <= 3)) { // find
+																		// were
+																		// to
+																		// put
+																		// wall
+																		// if
+			// we need to block someone
+
+			System.err.println("attacking :" + id + "myx: " + myx);
+			Astarable<Unit> pathfinding = allStarables.get(id);
+
+			Vector<Unit> pathx = astar.getPath(pathes.get(id));
+			for (Unit unit : pathx) {
+				System.err.println("=> " + unit);
+			}
+
 			// get his next position and block
 			Vector<Unit> hispath = astar.getPath(pathes.get(id));
 			System.err.println("his current position: " + getDragoon(id));
@@ -630,68 +647,69 @@ class Game {
 			if (walls.get(current) == null) {
 				System.err.println("(walls.get(current) == null)");
 
-				if ((next.x - current.x) != 0) { // means opponent go left or right
-												
+				if ((next.x - current.x) != 0) { // means opponent go left or
+													// right
+
 					System.err.println("((next.x - current.x) != 0)");
 					if ((next.x - current.x) > 0) { // oponent go rights
 						// ok check if there is no walls there
 						System.err.println("oponent go rights");
-						if (board.isWallPossible(next.x, next.y, 'V', current, pathfinding)) {
+						if (board.isWallPossible(next.x, next.y, 'V', dragoons, allStarables)) {
 							System.out.format("%d %d %c\n", next.x, next.y, 'V');
 							return;
-						} 
-							
-						if (board.isWallPossible(next.x, next.y - 1, 'V', current, pathfinding)) {
+						}
+
+						if (board.isWallPossible(next.x, next.y - 1, 'V', dragoons, allStarables)) {
 							System.out.format("%d %d %c\n", next.x, next.y - 1, 'V');
 							return;
-						} 			
-						
-						if (board.isWallPossible(next.x + 1, next.y, 'V', current, pathfinding)) {
+						}
+
+						if (board.isWallPossible(next.x + 1, next.y, 'V', dragoons, allStarables)) {
 							System.out.format("%d %d %c\n", next.x + 1, next.y, 'V');
 							return;
-						} 		
+						}
 					} else {
 						System.err.println("oponent go left");
-					
-						if (board.isWallPossible(current.x, current.y, 'V', current, pathfinding)) {
+
+						if (board.isWallPossible(current.x, current.y, 'V', dragoons, allStarables)) {
 							System.out.format("%d %d %c\n", current.x, current.y, 'V');
 							return;
-						} 						
-						if (board.isWallPossible(current.x, current.y - 1, 'V', current, pathfinding)) {
+						}
+						if (board.isWallPossible(current.x, current.y - 1, 'V', dragoons, allStarables)) {
 							System.out.format("%d %d %c\n", current.x, current.y - 1, 'V');
 							return;
-						}		
-						
-						if (board.isWallPossible(next.x, next.y + 1, 'V', current, pathfinding)) {
-							System.out.format("%d %d %c\n", next.x, next.y + 1, 'V');
+						}
+
+						if (board.isWallPossible(next.x + 1, next.y, 'V', dragoons, allStarables)) {
+							System.out.format("%d %d %c\n", next.x + 1, next.y, 'V');
 							return;
-						} 							
+						}
 					}
-			
+
 				} else {
 					System.err.println("else ((next.x - current.x) != 0)");
 					if ((next.y - current.y) > 0) { // oponent go down
 						System.err.println("oponent goes down");
 						// ok check if there is no walls there
-						if (board.isWallPossible(next.x, next.y, 'H', current, pathfinding)) {
+						if (board.isWallPossible(next.x, next.y, 'H', dragoons, allStarables)) {
 							System.out.format("%d %d %c\n", next.x, next.y, 'H');
 							return;
 						}
-						
-						if (board.isWallPossible(next.x - 1, next.y, 'H', current, pathfinding)) {
+
+						if (board.isWallPossible(next.x - 1, next.y, 'H', dragoons, allStarables)) {
 							System.out.format("%d %d %c\n", next.x - 1, next.y, 'H');
 							return;
 						}
 
 					} else {
-						
+
 						System.err.println("oponent goes up");
-						if (board.isWallPossible(current.x, current.y, 'H', current, pathfinding)) {
+						if (board.isWallPossible(current.x, current.y, 'H', dragoons, allStarables)) {
 							System.out.format("%d %d %c\n", current.x, current.y, 'H');
 							return;
-						} 
-						
-						if (board.isWallPossible(current.x - 1, current.y, 'H', current, pathfinding)) {
+						}
+
+						if (board.isWallPossible(current.x - 1, current.y, 'H', dragoons, allStarables)) {
 							System.out.format("%d %d %c\n", current.x - 1, current.y, 'H');
 							return;
 						}
@@ -700,7 +718,6 @@ class Game {
 				System.err.println("otherwise, walk normally because of no choice");
 				Vector<Unit> path = astar.getPath(pathes.get(myId));
 				System.out.println(getDirection(getMe(), path.elementAt(1)));
-				 
 
 			} else { // otherwise, walk normally
 				System.err.println("otherwise, walk normally");
@@ -713,7 +730,8 @@ class Game {
 			Vector<Unit> path = astar.getPath(pathes.get(myId));
 			System.out.println(getDirection(getMe(), path.elementAt(1)));
 		}
-	}}
+	}
+}
 
 final class Factory {
 	static Factory _instance;
@@ -733,7 +751,7 @@ final class Factory {
 		return new Unit(x, y, _instance.width);
 	}
 
-	static Dragoon createDragon(int x, int y, int wallsLeft) {	
+	static Dragoon createDragon(int x, int y, int wallsLeft) {
 		return new Dragoon(x, y, _instance.width, wallsLeft);
 	}
 
