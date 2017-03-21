@@ -470,19 +470,23 @@ public:
         cost = -1;
     }
 
-    inline Direction direction() const {
+    inline Direction direction() const
+    {
         return dn;
     }
 
-    inline void setDirection(Direction direction_) {
+    inline void setDirection(Direction direction_)
+    {
         dn = direction_;
     }
 
-    inline MoveType moveType() const {
+    inline MoveType moveType() const
+    {
         return mt;
     }
 
-    inline setMoveType(MoveType moveType_) {
+    inline void setMoveType(MoveType moveType_)
+    {
         mt = moveType_;
     }
 
@@ -546,8 +550,10 @@ Unit* Factory::getUnit(int x, int y)
 
 typedef std::unordered_map<int, std::vector<int> > Elevator;
 typedef std::unordered_map<Unit*, std::vector<Unit*> > Map;
+typedef std::vector<bool> Visited;
 
-Direction getOpposite(Direction direction) {
+Direction getOpposite(Direction direction)
+{
     if (direction == LEFT) return RIGHT;
     return LEFT;
 }
@@ -561,16 +567,26 @@ void addUnit(std::vector<Unit*>& localMoves, int x, int y, int cost, MoveType mt
     localMoves.push_back(unit);
 }
 
-void buildMap(Map& moves, Elevator& elevators, int x, int y, Direction direction, int exitFloor, int exitPos)
+
+void buildMap(Map& moves, Visited& visited, Elevator& elevators, int x, int y, Direction direction, int exitFloor, int exitPos)
 {
+
+
+    Unit *current = Factory::getUnit(x, y);
+    if (visited[current->getId()] == true)
+    {
+        return ;
+    }
+    visited[current->getId()] = true;
+
     std::cerr << "y: " << y << std::endl;
     if (y > exitFloor)
     {
-       // std::cout << "level= " << y << " above exit floor, ignoring !" << std::endl;
+        // std::cout << "level= " << y << " above exit floor, ignoring !" << std::endl;
         return ;
     }
 
-    Unit *current = Factory::getUnit(x, y);
+
     std::vector<int>& elevatorPositions(elevators[y]);
 
     int left_min = std::numeric_limits<int>::max();
@@ -578,7 +594,6 @@ void buildMap(Map& moves, Elevator& elevators, int x, int y, Direction direction
     int right_min = std::numeric_limits<int>::min();
     int right_pos = -1;
     int just_above = -1;
-
 
     if (y == exitFloor)
     {
@@ -590,8 +605,8 @@ void buildMap(Map& moves, Elevator& elevators, int x, int y, Direction direction
             Direction newDir = Direction::RIGHT;
             if (direction != Direction::RIGHT)
             {
-             cost += 3;
-             newDir = Direction::RIGHT;
+                cost += 3;
+                newDir = Direction::RIGHT;
             }
             addUnit(moves[current], exitPos, y + 1, cost, MoveType::EXIT, newDir);
         }
@@ -679,8 +694,13 @@ void buildMap(Map& moves, Elevator& elevators, int x, int y, Direction direction
     auto& localMoves(moves[current]);
 
     std::vector<Unit *> cache(localMoves);
-    for (Unit* unit : cache){
-        buildMap(moves, elevators, unit->x, unit->y, unit->direction(), exitFloor, exitPos);
+
+    for (Unit* unit : cache)
+    {
+        std::cerr << "cache.size= " << cache.size() << std::endl;
+        if (visited[unit->getId()] == true)
+            continue ;
+        buildMap(moves, visited, elevators, unit->x, unit->y, unit->direction(), exitFloor, exitPos);
     }
 }
 
@@ -720,9 +740,10 @@ int main()
     int nbElevators = 36;
 
     int in_elevators[][2] = {{11,45}, {1,36}, {2,43}, {3,17}, {11,50}, {3,24}, {10,3},
-    {10,23}, {6,23}, {8,1}, {2,56}, {2,9}, {1,62}, {4,9}, {2,24}, {3,30}, {6,35}, {1,24}, {11,4},
-    {5,4}, {8,63}, {1,4}, {8,9}, {6,3}, {1,17}, {9,2}, {10,45}, {6,9}, {9,17}, {1,50}, {8,23}, {2,3},
-    {3,60}, {4,23}, {7,48}, {2,23}};
+        {10,23}, {6,23}, {8,1}, {2,56}, {2,9}, {1,62}, {4,9}, {2,24}, {3,30}, {6,35}, {1,24}, {11,4},
+        {5,4}, {8,63}, {1,4}, {8,9}, {6,3}, {1,17}, {9,2}, {10,45}, {6,9}, {9,17}, {1,50}, {8,23}, {2,3},
+        {3,60}, {4,23}, {7,48}, {2,23}
+    };
 
     Factory::instanceIt(width, nbFloors);
 
@@ -783,11 +804,13 @@ int main()
         }
 
         Map moves;
-        buildMap(moves, elevators, clonePos, cloneFloor, RIGHT, exitFloor, exitPos);
+        Visited visited(width * nbFloors, false);
+        buildMap(moves, visited, elevators, clonePos, cloneFloor, RIGHT, exitFloor, exitPos);
 
         std::cout << "moves=>" << std::endl;
         std::vector<Unit*> level = moves[Factory::getUnit(6, 0)];
-        for (Unit *unit : level) {
+        for (Unit *unit : level)
+        {
             std::cerr << "(.) => " << unit->x << ", " << unit->y << " cost= " << unit->getCost() << std::endl;
         }
     }
