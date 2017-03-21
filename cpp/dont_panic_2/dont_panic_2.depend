@@ -1,0 +1,16 @@
+# depslib dependency file v1.0
+1490079931 source:c:\code\cg\cpp\dont_panic_2\main.cpp
+	<iostream>
+	<string>
+	<vector>
+	<algorithm>
+	<map>
+	<climits>
+	<stack>
+	<functional>
+	<unordered_map>
+	<set>
+	<queue>
+	<chrono>
+	<ctime>
+
