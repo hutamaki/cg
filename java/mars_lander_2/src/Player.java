@@ -61,6 +61,7 @@ class Player {
 	private int peak;
 
 	private Point landing;
+	private int indexOfLandingZone = 0;
 	private States state = States.STARTING;
 
 	/*
@@ -89,7 +90,7 @@ class Player {
 	 * construct the landing point (ie middle of the landing zone)
 	 */
 	private void constructLandingPoint() throws Exception {
-		int indexOfLandingZone = landingZone();
+		indexOfLandingZone = landingZone();
 		landing = new Point();
 		landing.x = (surface[indexOfLandingZone].x + surface[indexOfLandingZone - 1].x) / 2;
 		landing.y = surface[indexOfLandingZone].y;
@@ -220,6 +221,10 @@ class Player {
 		return (v1 * v1 - v0 * v0) / (2.0 * (x1 - x0));
 	}
 
+	public boolean isInLandingZone(Point pos) {
+		return (pos.x < surface[indexOfLandingZone].x && pos.x > surface[indexOfLandingZone - 1].x);
+	}
+
 	/*
 	 * @param (x,y) position of the module
 	 * 
@@ -236,6 +241,7 @@ class Player {
 	public void land(Point pos, int hSpeed, int vSpeed, int fuel, int rotate, int power) {
 
 		int nbCollisions = collisions(pos);
+		int engine_power = 0;
 		System.err.println("collisions: " + nbCollisions);
 
 		if (nbCollisions > 1) {
@@ -245,31 +251,70 @@ class Player {
 			// until nbCollisions == 1
 		}
 
-		// MRUA
-		// v^2 = v0^2 + 2 * a (x - x0)
-		// http://www.physics.ohio-state.edu/~dws/class/131/lecture_recap.pdf
-		// => a = (v^2 - v0^2) / 2 * (x - x0)
+		int dx = landing.x - pos.x;		
+
+		
+
+		int abs_hspeed = Math.abs(hSpeed);
+		
+		System.err.println("dx: " + dx) ;
+		System.err.println("vspeed: " + vSpeed);
+		System.err.println("hspeed: " + hSpeed);
+		System.err.println("abs(hspeed): " + abs_hspeed);
+		System.err.println("pos.y: " + pos.y);
+
+		
 		if (state == States.STARTING) {
 			state = States.MIDDLE;
-			
+
 			// go to the right direction if we are not abose landing zone
 			int r = 0;
-			if (pos.x < landing.x) {
-				r = -45;
+			if (dx >= 0) {
+				System.err.println(" go right ");
+				r = -21;
 			} else {
-				if (pos.x > landing.x) {
-					r = 45;
-				}
+					r = 21;
+					System.err.println(" go left ");
 			}
-			System.out.println(r + " " + 4);
+			System.out.println(r + " " + 3);
 
 		} else {
-			double acceleration = MRUA(pos.x, hSpeed, landing.x, 0);
-			System.err.println("acceleration: " + acceleration);
-			double r = (double) Math.atan(power / acceleration) * 180 / Math.PI;
-			System.err.println("r: " + r);
 
-			System.out.println(rotate + " " + 4);
+			engine_power = 3;
+
+			int optimalHSpeed = 40;
+			if (abs_hspeed >= optimalHSpeed) {
+				rotate = hSpeed > 0 ? 21 : -21;
+			}
+
+			if (vSpeed <= -20) {
+				engine_power = 3;
+			}
+			
+			if (abs_hspeed >= 40) {
+				engine_power = 3;
+			}
+
+			// the descent
+			if (isInLandingZone(pos)) {
+				
+				if ((abs_hspeed >= 2) && pos.y > 200) {
+					rotate = hSpeed > 0 ? 21 : -21;
+					System.err.println("isInLandingZone");
+				} else {
+
+					System.err.println("WITHIN LANDING ZONE !!!");
+					System.err.println("vspeed: " + vSpeed);
+					rotate = 0;
+					engine_power = 0;
+					if (vSpeed <= -20) {
+						engine_power = 4;
+						System.err.println("aatatatatatat");
+					}
+				}
+
+			}
+			System.out.println((int) (rotate) + " " + engine_power);
 		}
 	}
 
