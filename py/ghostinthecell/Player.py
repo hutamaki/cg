@@ -1,44 +1,39 @@
 import sys
-import math
 
 """
 GLOBAL VARS
 """
+from copy import deepcopy
+
+#global Map is a map of map of distance
+# ie [] globalMap[factory_id1][factory_id2] = distance
+
+# map of map of (factory, distance) for each factory, sorted by distance  
+graphset = {}
 
 globalMap = {}
 myFactories = {}
 theirFactories = {}
+allFactories = {}
 
 myTroops = {}
 theirTroops = {}
 
-graphset = {}
-median = -1;
+bombs = {}
+
 
 """ 
 INITIALISATION PHASE
 """
 
-def calcMedian():
-    dicts = list(globalMap.values())
-    result = []
-    for item in dicts:
-        result = result + list(item.values())
-    result = sorted(result)
-    median = result[int(len(result) / 2)];
-    return median
-
 def buildGraphcet():
-    
-    # get median
-    median = 100;#calcMedian()
-    print("median> ", median, file=sys.stderr)
-    
+        
     # ok we have a root, we can now build the graphset
-    for entityId, items in globalMap.items():
-        projection = [(k, v) for (k, v) in items.items() if v <= median]
-        projection = sorted(projection, key=lambda x: x[1]);
-        graphset[entityId] = projection.copy()
+    for factoryIdSrc, items in globalMap.items():
+        projection = [(factoryIdDst, distance) for (factoryIdDst, distance) in items.items()]
+        projection = sorted(projection, key=lambda x: x[1]); # sorted by distance
+        graphset[factoryIdSrc] = projection.copy()
+        
     print("graphset> ", graphset, file=sys.stderr)
     
 """
@@ -46,76 +41,97 @@ FACTORY
 """
 class Factory:
 
-    def __init__(self, entityId, nbCyborgs, production, waitNormal, isNeutral):
+    def __init__(self, entityId, unitCount, production, waitNormal, owner):
         self.entityId = entityId
         self.production = production
-        self.nbCyborgs = nbCyborgs
+        self.unitCount = unitCount
         self.waitNormal = waitNormal
-        self.isNeutral = isNeutral
-
+        self.isNeutral = (owner == 0)
+        self.owner = owner
+        self.disabled = waitNormal
+        
     def __repr__(self):
         return self.__str__()
     
     def __str__(self):
-        return "%d> production= %d, nbCyborg= %d, waitNormal= %d" % (self.entityId, self.production, self.nbCyborgs, self.waitNormal)
+        return "%d> production= %d, unitCount= %d, waitNormal= %d, owner=%d, disable?=%d" % (self.entityId, self.production, self.unitCount, self.waitNormal, self.owner, self.disabled)
 
 """
 TROOP
 """
 class Troop:
     
-    def __init__(self, entityId, start, target, nbCyborg, eta):
+    def __init__(self, entityId, start, target, unitCount, eta, owner):
         self.entityId = entityId
         self.start = start
         self.target = target
-        self.nbCyborg = nbCyborg
+        self.unitCount = unitCount
         self.eta = eta
+        self.owner = owner 
+        
+    # method for simulation
+    def move(self):
+        if self.eta > 0:
+            self.eta -= 1
 
     def __repr__(self):
         return self.__str__()
     
     def __str__(self):
-        return "%d> start= %d, target= %d, nb= %d, eta=%d" % (self.entityId, self.start, self.target, self.nb, self.eta)        
+        return "%d> start= %d, target= %d, nb= %d, eta=%d owner=%d" % (self.entityId, self.start, self.target, self.unitCount, self.eta, self.owner)
+    
+class Bomb:
+    
+    def __init__(self, entityId, start, target, eta, owner):
+        self.entityId = entityId
+        self.start = start
+        self.target = target
+        self.eta = eta
+        self.owner = owner
+        
+    def move(self):
+        if self.eta > 0:
+            self.eta -= 1
+    
+    def __repr__(self):
+        return self.__str__()
+    
+    def __str__(self):
+        return "%d> start= %d, target= %d, eta=%d, self.owner=%d" % (self.entityId, self.start, self.target, self.eta, self.owner)
 
 """
 GAME
 """
-def rate(id):
+def rate(fid):
     fact = None;
-    if id in myFactories:
-        fact = myFactories[id]
+    if fid in myFactories:
+        fact = myFactories[fid]
     else:
-        fact = theirFactories[id]
-    return fact.production * 1000 - fact.nbCyborgs * 100
+        fact = theirFactories[fid]
+    return fact.unitCount 
 
 class Game:
    
-    def mercyLess(self):
+    def mercyLess(self, nuclearDetected):
         
         commands = ["WAIT"]
         # now is time to perform a bfs, to SEND IT ALL
         done = []            
-        targets = [v.entityId for (k,v) in myFactories.items()]
+        targets = [entityId for (entityId,_) in myFactories.items()]
         while targets:
-            
-            print ("targets> ", targets, file=sys.stderr)
-                        
-            # pop first element
             current = targets[0]
 
+            # avoid neighbours
             if current not in myFactories:
                 continue
 
-            done.append(current) #mark as done
-            print("current> ", current, file=sys.stderr)
-            targets = targets[1:]
+            #mark as done
+            done.append(current)
             
-            isUnderAttack, nb = needReinforcement(current)
-            if isUnderAttack:
-                print("isUnderAttack: ignonring %d" % current, file=sys.stderr);
-                continue ;
+            print("current> ", current, file=sys.stderr)            
+            targets = targets[1:]
 
-            neighbours = sorted(graphset[current], key=lambda x : x[1] * 1000 - rate(x[0]))   # tuples of (factory_id, distance) sorted by rate
+            neighbours = sorted(graphset[current], key=lambda x : x[1] * 1000 - rate(x[0]))   # tuples of (factory_id, distance) sorted by rate          
             for neib in neighbours:
                 
                 # id of target
@@ -123,6 +139,7 @@ class Game:
                 print("considering ", neibId, file=sys.stderr)            
                 
                 # compute how many to send
+                isUnderAttack, mynb = needReinforcement(current)
                 toSend= 0
                 if neibId in myFactories:
                     attacked, nb = needReinforcement(neibId)
@@ -131,28 +148,23 @@ class Game:
                         if nb >= 0: # means is attacked
                             print("base ",  neibId, " attacked by ", nb, " cyborgs" , file=sys.stderr)
                             toSend = nb + 1 
-                            myFactories[current].nbCyborgs -= max(max(0, toSend), myFactories[current].nbCyborgs) # decreate pop
-                            myFactories[neibId].nbCyborgs += max(max(0, toSend), myFactories[current].nbCyborgs) # increase dest pop
+                            myFactories[current].unitCount -= max(max(0, toSend), myFactories[current].unitCount) # decreate pop
+                            myFactories[neibId].unitCount += max(max(0, toSend), myFactories[current].unitCount) # increase dest pop
                     else:
                         if isUnderAttack < -13:
-                            toSend = -(isUnderAttack + 13);
-                            myFactories[current].nbCyborgs -= max(max(0, toSend), myFactories[current].nbCyborgs) # decreate pop
-                    if (neibId not in done):
-                        print("not in done", file=sys.stderr)
-                        if (neibId not in targets):
-                            print("not in targets", file=sys.stderr)
-                            print ("done: ", done, file=sys.stderr)
-                            print ("target: ", targets, file=sys.stderr)
-                            #if not neib in targets):
-                            print ("adding !!!!!!!!!!!!!!!!!!!!!!!", file=sys.stderr)
-                            targets.append(neibId)
+                            toSend = -(mynb + 13);
+                            myFactories[current].unitCount -= max(max(0, toSend), myFactories[current].unitCount) # decreate pop                  
                 else:
+                    if isUnderAttack:
+                        print("isUnderAttack: ignoring %d" % current, file=sys.stderr);
+                        continue ;
+                
                     fac = theirFactories[neibId]                    
                     if fac.production == 0:
                         continue 
                     
                     
-                    toSend = fac.nbCyborgs + 1
+                    toSend = fac.unitCount + 1
                     print("toSent1: ", toSend, file=sys.stderr)
                     if not fac.isNeutral:
                         toSend += (neib[1] + 1) * fac.production
@@ -162,13 +174,13 @@ class Game:
                     toSend = max(toSend, 0)
 
                     # do not sent anything if not
-                    if toSend > myFactories[current].nbCyborgs:
-                        print("continue because not enough= ", myFactories[current], file=sys.stderr)
-                        bombNearestBig(commands)
-                        continue 
+                    #if toSend > myFactories[current].unitCount:
+                        #print("continue because not enough= ", myFactories[current], file=sys.stderr)
+                    bombNearestBig(commands, nuclearDetected)
+                    #    continue 
 
                     
-                myFactories[current].nbCyborgs -= min(max(0, toSend), myFactories[current].nbCyborgs) # decreate pop
+                myFactories[current].unitCount -= min(max(0, toSend), myFactories[current].unitCount) # decreate pop
                     
                 print("MOVE %d %d %d" % (current, neibId, toSend), file=sys.stderr)
                 # add command    
@@ -181,72 +193,177 @@ class Game:
 """
 BOMB
 """
-def bombNearestBig(commands):
+def bombNearestBig(commands, nuclearDetected):
+    
+    if nuclearDetected == True:
+        return 
+    
     theirfactByRate = sorted(theirFactories.values(), key=lambda k: rate(k.entityId), reverse=True)
-    target = [x for x in theirfactByRate if not x.isNeutral][0]
-    print("BOMB target: ", target, file=sys.stderr)
+    targets = [x for x in theirfactByRate if (not x.isNeutral and x.production > 2)]
+    if len(targets) == 0: 
+        return
+    for target in targets:
+        print("> target: ", target, file=sys.stderr)
+    for target in targets:
+        
+        #onWay = OnTheWay(target.entityId) 
+        #print("onWay= %d" % onWay, file=sys.stderr)
+        #if onWay > 0:
+            #print("Troops onway to target, ignoring...", file=sys.stderr)
+         #   continue
+        
+        print("BOMB target: ", target, file=sys.stderr)
 
-    nodes = sorted(graphset[target.entityId], key=lambda x : x[1])
-    print("NODES ", nodes, file=sys.stderr)
-    filtered = [x for x in  nodes if x[0] in myFactories]    
-    print("FILTERED ", filtered, file=sys.stderr)
-    source = filtered[0]
-    print("FROM: ", source, file=sys.stderr)
-    commands += "; BOMB %d %d" % (source[0], target.entityId)
+        nodes = sorted(graphset[target.entityId], key=lambda x : x[1])
+        print("NODES ", nodes, file=sys.stderr)
+        filtered = [x for x in  nodes if x[0] in myFactories]    
+        print("FILTERED ", filtered, file=sys.stderr)
+        source = filtered[0]
+        print("FROM: ", source, file=sys.stderr)
+        commands += "; BOMB %d %d" % (source[0], target.entityId)
+        nuclearDetected = True
+        break
 
 
 """
 EVOLVE
 """
 def computeMyPopulation():
-    nbCyborgs = 0
-    for key, factory in myFactories.items():
-        nbCyborgs += factory.nbCyborgs
-    for k, troop in myTroops.items():
-        nbCyborgs += troop.nbCyborg    
-    return nbCyborgs
+    unitCount = 0
+    for _, factory in myFactories.items():
+        unitCount += factory.unitCount
+    for _, troop in myTroops.items():
+        unitCount += troop.unitCount    
+    return unitCount
 
 def computetheirPopulation():
-    nbCyborgs = 0
-    for key, factory in theirFactories.items():
+    unitCount = 0
+    for _, factory in theirFactories.items():
         if factory.isNeutral: 
             continue
-        nbCyborgs += factory.nbCyborgs        
-    for k, troop in theirTroops.items():
-        nbCyborgs += troop.nbCyborg    
-    return nbCyborgs    
+        unitCount += factory.unitCount        
+    for _, troop in theirTroops.items():
+        unitCount += troop.unitCount    
+    return unitCount    
     
 def evolve(commands):
     if (computeMyPopulation() - computetheirPopulation() < 10):
         return
     for k, base in myFactories.items():
-        if base.nbCyborgs > 10:
+        if base.unitCount > 10:
             attacked, nb = needReinforcement(base.entityId)
             if not attacked or (attacked and nb <= -10):
                 commands += "; INC %d" % k
             
 """
+**********************
 SIMU
+**********************
+Simulation @ end
 """
+
+def simulate():
+    
+    # for each turn    
+    localallFactories = deepcopy(allFactories)
+    
+    localMyTroops = deepcopy(myTroops)
+    localTheirTroops = deepcopy(theirTroops)
+    allTroops = {**localMyTroops, **localTheirTroops}
+    
+    localbombs = deepcopy(bombs)
+    
+    readyToFight = {factoryId : {-1 : 0, 1 : 0}  for (factoryId, _) in allFactories.items()} 
+    
+    players = {}
+    
+    while len(allTroops) > 0:
+        
+        players = {1: { "factories": 0, "troops": 0}, 0: {"factories": 0, "troops": 0}, -1 : { "factories": 0, "troops": 0}}
+    
+        # 1 - production for factory        
+        for _, factory in localallFactories.items():
+            if factory.disabled > 0:
+                factory.disabled -= 1                
+            if (factory.disabled <= 0):
+                factory.unitCount += factory.production
+        
+        # 2 - solve battles
+        
+        # move troops & populate all arriving troops and remove them from moving troops
+        for _, troop in allTroops.items():
+            troop.move()
+            if troop.eta <= 0:  
+                readyToFight[troop.target][troop.owner] += troop.unitCount                
+        allTroops = {troopId : troop for (troopId, troop) in allTroops.items() if troop.eta > 0}
+        
+        for factoryId, fightingTroops in readyToFight.items():
+            units =  min(fightingTroops[-1], fightingTroops[1])
+            fightingTroops[-1] -= units
+            fightingTroops[1] -= units
+            
+            # remaining units fight on the factory
+            factory = localallFactories[factoryId]
+            for player in [-1, 1]:
+                unitCount = fightingTroops[player]                                
+                if factory.owner == player: # if its our factory, juse accumulates
+                    factory.unitCount += unitCount
+                else:
+                    if unitCount > factory.unitCount:
+                        factory.owner = player
+                        factory.unitCount = unitCount - factory.unitCount
+                    else:
+                        factory.unitCount -= unitCount
+                
+        # handle bombs   
+        for _, bomb in localbombs.items():
+            bomb.move()
+            if bomb.eta <= 0 and bomb.target != -1:
+                factory = localallFactories[bomb.target] 
+                currentCyborgs = factory.unitCount
+                factory.unitCount =  max(0, currentCyborgs - max(10, int(currentCyborgs / 2)))
+                factory.disabled = 5
+        localbombs = { bombId : bomb for (bombId, bomb) in localbombs.items() if bomb.eta > 0 or bomb.target != -1}
+        
+        # update scores
+        for playerId in [-1, 1]:
+            players[playerId]["factories"] = 0
+            players[playerId]["troops"] = 0
+            
+        for _, factory in localallFactories.items(): 
+            players[factory.owner]["factories"] += 1        
+            players[factory.owner]["troops"] += factory.unitCount
+            
+    print(players, file=sys.stderr)
+            
+
+
 def OnTheWay(entityId):
     onWay = 0
-    for k, troop in myTroops.items():
+    for _, troop in myTroops.items():
+        #print("OnTheWay::troop= ", troop, file=sys.stderr)
         if troop.target == entityId:
-            onWay += troop.nbCyborg
+            onWay += troop.unitCount
     return onWay
     
 def needReinforcement(entityId):
     onWay = 0
     attacked = False
-    for k, troop in theirTroops.items():
+    for _, troop in theirTroops.items():
         if troop.target == entityId:
-            onWay += troop.nbCyborg
+            onWay += troop.unitCount
             attacked = True
-    for k, troop in myTroops.items():
+    for _, troop in myTroops.items():
         if troop.target == entityId:
-            onWay -= troop.nbCyborg
-    onWay -= myFactories[entityId].nbCyborgs 
+            onWay -= troop.unitCount
+    onWay -= myFactories[entityId].unitCount 
     return attacked, onWay
+
+'''
+*******************
+Main program
+*******************
+'''
 
 factory_count = int(input())  # the number of factories
 link_count = int(input())  # the number of links between factories
@@ -262,7 +379,6 @@ for i in range(link_count):
 
     #print(factory_1, " -> ", factory_2, " = ", distance)
 print("init phase...", file=sys.stderr)
-calcMedian()    
 buildGraphcet()
 
 print("game creation...", file=sys.stderr)
@@ -277,6 +393,10 @@ while True:
     myTroops = {}
     theirTroops = {}
     
+    bombs = {}
+    
+    nuclearDetected = False
+    
     print("getting entities...", file=sys.stderr)
     entity_count = int(input())  # the number of entities (e.g. factories and troops)
     for i in range(entity_count):
@@ -290,25 +410,27 @@ while True:
         
         if entity_type == "FACTORY":        
             if arg_1 == -1:
-                theirFactories[entity_id] = Factory(entity_id, arg_2, arg_3, arg_4, False)
+                theirFactories[entity_id] = Factory(entity_id, arg_2, arg_3, arg_4, -1)
+                allFactories[entity_id] = theirFactories[entity_id];
             elif arg_1 == 0:
-                theirFactories[entity_id] = Factory(entity_id, arg_2, arg_3, arg_4, True)
+                theirFactories[entity_id] = Factory(entity_id, arg_2, arg_3, arg_4, 0)
+                allFactories[entity_id] = theirFactories[entity_id];
             elif arg_1 == 1:
-                myFactories[entity_id] = Factory(entity_id, arg_2, arg_3, arg_4, False)
+                myFactories[entity_id] = Factory(entity_id, arg_2, arg_3, arg_4, 1)
+                allFactories[entity_id] = myFactories[entity_id];
         elif entity_type == "TROOP":
-            troop = Troop(entity_id, arg_2, arg_3, arg_4, arg_5)
+            troop = Troop(entity_id, arg_2, arg_3, arg_4, arg_5, arg_1)
             if arg_1 == -1:
                 theirTroops[entity_id] = troop
             elif arg_1 == 1:
                 myTroops[entity_id] = troop
+        elif entity_type == "BOMB":
+            bombs[entity_id] = Bomb(entity_id, arg_2, arg_3, arg_4, arg_1)
     
     for _, fact in myFactories.items():
         print(fact, file=sys.stderr)
 
-    print(game.mercyLess())
-    # Write an action using print
-    # To debug: print("Debug messages...", file=sys.stderr)
-
-
-    # Any valid action, such as "WAIT" or "MOVE source destination cyborgs"
-    #print("WAIT")
+    print("-- simulation --", file=sys.stderr)
+    simulate()
+    
+    print(game.mercyLess(nuclearDetected))
