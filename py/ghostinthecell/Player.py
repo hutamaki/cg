@@ -4,6 +4,7 @@ import sys
 GLOBAL VARS
 """
 from copy import deepcopy
+from ctypes._endian import _OTHER_ENDIAN
 
 #global Map is a map of map of distance
 # ie [] globalMap[factory_id1][factory_id2] = distance
@@ -49,6 +50,9 @@ class Factory:
         self.isNeutral = (owner == 0)
         self.owner = owner
         self.disabled = waitNormal
+        
+    def __eq__(self, other):
+        return self.entityId == other.entityId
         
     def __repr__(self):
         return self.__str__()
@@ -108,9 +112,247 @@ def rate(fid):
         fact = myFactories[fid]
     else:
         fact = theirFactories[fid]
-    return fact.unitCount 
+    return fact.unitCount
+
+def OnTheWay(entityId):
+    onWay = 0
+    for _, troop in myTroops.items():
+        #print("OnTheWay::troop= ", troop, file=sys.stderr)
+        if troop.target == entityId:
+            onWay += troop.unitCount
+    return onWay
+    
+def needReinforcement(entityId):
+    onWay = 0
+    attacked = False
+
+    for _, troop in theirTroops.items():
+        if troop.target == entityId:
+            onWay += troop.unitCount
+            attacked = True
+    for _, troop in myTroops.items():
+        if troop.target == entityId:
+            onWay -= troop.unitCount
+    onWay -= myFactories[entityId].unitCount 
+    return attacked, onWay
+
+"""
+**********************
+SIMU
+**********************
+"""
+
+"""
+Simulation @ end
+"""
+def simulate():
+    
+    # for each turn    
+    localallFactories = deepcopy(allFactories)
+    
+    localMyTroops = deepcopy(myTroops)
+    localTheirTroops = deepcopy(theirTroops)
+    allTroops = {**localMyTroops, **localTheirTroops}
+    
+    localbombs = deepcopy(bombs)
+    players = {}
+    
+    while len(allTroops) > 0:
+    
+        readyToFight = {factoryId : {-1 : 0, 1 : 0}  for (factoryId, _) in allFactories.items()} 
+        players = {1: { "factories": 0, "troops": 0}, 0: {"factories": 0, "troops": 0}, -1 : { "factories": 0, "troops": 0}}
+    
+        # 1 - production for factory        
+        for _, factory in localallFactories.items():
+            if factory.disabled > 0:
+                factory.disabled -= 1                
+            if (factory.disabled <= 0):
+                factory.unitCount += factory.production
+        
+        # 2 - solve battles
+        
+        # move troops & populate all arriving troops and remove them from moving troops
+        for _, troop in allTroops.items():
+            #print("troop move: ", troop, file=sys.stderr)
+            troop.move()
+            if troop.eta <= 0:  
+                readyToFight[troop.target][troop.owner] += troop.unitCount                
+        allTroops = {troopId : troop for (troopId, troop) in allTroops.items() if troop.eta > 0}
+        
+        for factoryId, fightingTroops in readyToFight.items():
+            units =  min(fightingTroops[-1], fightingTroops[1])
+            fightingTroops[-1] -= units
+            fightingTroops[1] -= units
+            
+            #print("factoryID: ", factoryId, " / ", fightingTroops[-1] , " / ",  fightingTroops[1], file=sys.stderr)
+            
+            # remaining units fight on the factory
+            factory = localallFactories[factoryId]
+            for player in [-1, 1]:
+                unitCount = fightingTroops[player]                                
+                if factory.owner == player: # if its our factory, juse accumulates
+                    factory.unitCount += unitCount
+                else:
+                    if unitCount > factory.unitCount:
+                        print("factory %d changes its owner !" % factory.entityId, file=sys.stderr)
+                        factory.owner = 1 if (player == 1) else -1
+                        factory.unitCount = unitCount - factory.unitCount
+                    else:
+                        factory.unitCount -= unitCount
+                
+        # handle bombs   
+        for _, bomb in localbombs.items():
+            bomb.move()
+            if bomb.eta <= 0 and bomb.target != -1:
+                factory = localallFactories[bomb.target] 
+                currentCyborgs = factory.unitCount
+                factory.unitCount =  max(0, currentCyborgs - max(10, int(currentCyborgs / 2)))
+                factory.disabled = 5
+        localbombs = { bombId : bomb for (bombId, bomb) in localbombs.items() if bomb.eta > 0 or bomb.target != -1}
+        
+        # update scores
+        for playerId in [-1, 1]:
+            players[playerId]["factories"] = 0
+            players[playerId]["troops"] = 0
+            
+        for _, factory in localallFactories.items(): 
+            players[factory.owner]["factories"] += 1        
+            players[factory.owner]["troops"] += factory.unitCount
+            
+    print(players, file=sys.stderr)
+    return localallFactories
+
+"""
+Simulates situation for a given base
+    - returns a couple (t, nbUnits), that means we need to put nbUnit troops before t time not to loose it 
+"""
+def ToProtectFactory(factory):
+   
+    allTroops = {**myTroops, **theirTroops}
+    allTroopsOnWay = sorted([troop for (_, troop) in allTroops.items() if troop.target == factory.entityId], key=lambda x: x.eta)
+    
+    eta = 0    
+    troopsOnFactory = factory.unitCount
+    factoryDisabled = factory.disabled
+    print("> troops on factory: ", troopsOnFactory, file=sys.stderr)
+    print("> all troops on the way: ", allTroopsOnWay, file=sys.stderr)
+    for troop in allTroopsOnWay:
+        print("> troop on way: ", troop, file=sys.stderr)
+        localEta = troop.eta - eta   
+        if localEta - factoryDisabled < 0:
+            factoryDisabled -= localEta
+        else:
+            troopsOnFactory += (localEta - factoryDisabled)  * factory.production
+            factoryDisabled = 0
+        print("> troops on factory at T: ", troopsOnFactory, file=sys.stderr)
+        if troop.owner == 1: # accumulates
+            troopsOnFactory += troop.unitCount
+        else: # fight
+            if troopsOnFactory - troop.unitCount < 0: # at this time, we loose factory
+                return (troop.eta, (troop.unitCount - troopsOnFactory) + 1)
+            else:
+                troopsOnFactory -= troop.unitCount
+        eta = troop.eta
+    raise Exception("We shoud not get here")
 
 class Game:
+    
+    # strategy attack nearest base !!!!!!!!!!!!!!!!!!
+    # however, defense computation for first iteration is good
+    
+    def desertStorm(self, nuclearDetected):
+        
+        resultOfSimulation = simulate()
+        
+        commands = ["WAIT"]
+          
+        # select bases on risk, protection first                  
+        ourBase = [factory for (_,factory) in myFactories.items()]        
+        print("ourBase:", ourBase, file=sys.stderr)
+        print("resultOfSimulaion:", resultOfSimulation, file=sys.stderr)
+                
+        onRisk = sorted([factory for (_, factory) in resultOfSimulation.items() if factory in ourBase and factory.owner == -1], key=lambda x : x.unitCount) # means we loose it
+        print("!!!!!!!!!!! onRisk: ", onRisk, file=sys.stderr)
+        for inRiskFactory in onRisk:
+            toProtect = ToProtectFactory(myFactories[inRiskFactory.entityId])
+            print("what we need to protect factory: ", toProtect, file=sys.stderr)
+            
+        
+         
+        commands = ["WAIT"]
+        # now is time to perform a bfs, to SEND IT ALL
+        done = []            
+        targets = [entityId for (entityId,_) in myFactories.items()]
+        while targets:
+            current = targets[0]
+
+            # avoid neighbours
+            if current not in myFactories:
+                continue
+
+            #mark as done
+            done.append(current)
+            
+            print("current> ", current, file=sys.stderr)            
+            targets = targets[1:]
+
+            neighbours = sorted(graphset[current], key=lambda x : x[1] * 1000 - rate(x[0]))   # tuples of (factory_id, distance) sorted by rate          
+            for neib in neighbours:
+                
+                # id of target
+                neibId = neib[0]
+                print("considering ", neibId, file=sys.stderr)            
+                
+                # compute how many to send
+                isUnderAttack, mynb = needReinforcement(current)
+                toSend= 0
+                if neibId in myFactories:
+                    attacked, nb = needReinforcement(neibId)
+                    if attacked:
+                        print("nb! ", nb, file=sys.stderr)
+                        if nb >= 0: # means is attacked
+                            print("base ",  neibId, " attacked by ", nb, " cyborgs" , file=sys.stderr)
+                            toSend = nb + 1 
+                            myFactories[current].unitCount -= max(max(0, toSend), myFactories[current].unitCount) # decreate pop
+                            myFactories[neibId].unitCount += max(max(0, toSend), myFactories[current].unitCount) # increase dest pop
+                    else:
+                        if isUnderAttack < -13:
+                            toSend = -(mynb + 13);
+                            myFactories[current].unitCount -= max(max(0, toSend), myFactories[current].unitCount) # decreate pop                  
+                else:
+                    if isUnderAttack:
+                        print("isUnderAttack: ignoring %d" % current, file=sys.stderr);
+                        continue ;
+                                    
+                    fac = theirFactories[neibId]                    
+                    if fac.production == 0:
+                        continue                 
+                    
+                    toSend = fac.unitCount + 1
+                    print("toSent1: ", toSend, file=sys.stderr)
+                    if not fac.isNeutral:
+                        toSend += (neib[1] + 1) * fac.production
+                    else:
+                        toSend -= OnTheWay(neibId) 
+                        print("toSent2: ", toSend, file=sys.stderr)
+                    toSend = max(toSend, 0)
+
+                    # do not sent anything if not
+                    #if toSend > myFactories[current].unitCount:
+                        #print("continue because not enough= ", myFactories[current], file=sys.stderr)
+                    bombNearestBig(commands, nuclearDetected)
+                    #    continue 
+
+                    
+                myFactories[current].unitCount -= min(max(0, toSend), myFactories[current].unitCount) # decreate pop
+                    
+                print("MOVE %d %d %d" % (current, neibId, toSend), file=sys.stderr)
+                # add command    
+                commands += "; MOVE %d %d %d" % (current, neibId, toSend)
+                
+                evolve(commands)
+        
+        return "".join(commands)  
    
     def mercyLess(self, nuclearDetected):
         
@@ -158,11 +400,10 @@ class Game:
                     if isUnderAttack:
                         print("isUnderAttack: ignoring %d" % current, file=sys.stderr);
                         continue ;
-                
+                                    
                     fac = theirFactories[neibId]                    
                     if fac.production == 0:
-                        continue 
-                    
+                        continue                 
                     
                     toSend = fac.unitCount + 1
                     print("toSent1: ", toSend, file=sys.stderr)
@@ -255,110 +496,6 @@ def evolve(commands):
             if not attacked or (attacked and nb <= -10):
                 commands += "; INC %d" % k
             
-"""
-**********************
-SIMU
-**********************
-Simulation @ end
-"""
-
-def simulate():
-    
-    # for each turn    
-    localallFactories = deepcopy(allFactories)
-    
-    localMyTroops = deepcopy(myTroops)
-    localTheirTroops = deepcopy(theirTroops)
-    allTroops = {**localMyTroops, **localTheirTroops}
-    
-    localbombs = deepcopy(bombs)
-    
-    readyToFight = {factoryId : {-1 : 0, 1 : 0}  for (factoryId, _) in allFactories.items()} 
-    
-    players = {}
-    
-    while len(allTroops) > 0:
-        
-        players = {1: { "factories": 0, "troops": 0}, 0: {"factories": 0, "troops": 0}, -1 : { "factories": 0, "troops": 0}}
-    
-        # 1 - production for factory        
-        for _, factory in localallFactories.items():
-            if factory.disabled > 0:
-                factory.disabled -= 1                
-            if (factory.disabled <= 0):
-                factory.unitCount += factory.production
-        
-        # 2 - solve battles
-        
-        # move troops & populate all arriving troops and remove them from moving troops
-        for _, troop in allTroops.items():
-            troop.move()
-            if troop.eta <= 0:  
-                readyToFight[troop.target][troop.owner] += troop.unitCount                
-        allTroops = {troopId : troop for (troopId, troop) in allTroops.items() if troop.eta > 0}
-        
-        for factoryId, fightingTroops in readyToFight.items():
-            units =  min(fightingTroops[-1], fightingTroops[1])
-            fightingTroops[-1] -= units
-            fightingTroops[1] -= units
-            
-            # remaining units fight on the factory
-            factory = localallFactories[factoryId]
-            for player in [-1, 1]:
-                unitCount = fightingTroops[player]                                
-                if factory.owner == player: # if its our factory, juse accumulates
-                    factory.unitCount += unitCount
-                else:
-                    if unitCount > factory.unitCount:
-                        factory.owner = player
-                        factory.unitCount = unitCount - factory.unitCount
-                    else:
-                        factory.unitCount -= unitCount
-                
-        # handle bombs   
-        for _, bomb in localbombs.items():
-            bomb.move()
-            if bomb.eta <= 0 and bomb.target != -1:
-                factory = localallFactories[bomb.target] 
-                currentCyborgs = factory.unitCount
-                factory.unitCount =  max(0, currentCyborgs - max(10, int(currentCyborgs / 2)))
-                factory.disabled = 5
-        localbombs = { bombId : bomb for (bombId, bomb) in localbombs.items() if bomb.eta > 0 or bomb.target != -1}
-        
-        # update scores
-        for playerId in [-1, 1]:
-            players[playerId]["factories"] = 0
-            players[playerId]["troops"] = 0
-            
-        for _, factory in localallFactories.items(): 
-            players[factory.owner]["factories"] += 1        
-            players[factory.owner]["troops"] += factory.unitCount
-            
-    print(players, file=sys.stderr)
-            
-
-
-def OnTheWay(entityId):
-    onWay = 0
-    for _, troop in myTroops.items():
-        #print("OnTheWay::troop= ", troop, file=sys.stderr)
-        if troop.target == entityId:
-            onWay += troop.unitCount
-    return onWay
-    
-def needReinforcement(entityId):
-    onWay = 0
-    attacked = False
-    for _, troop in theirTroops.items():
-        if troop.target == entityId:
-            onWay += troop.unitCount
-            attacked = True
-    for _, troop in myTroops.items():
-        if troop.target == entityId:
-            onWay -= troop.unitCount
-    onWay -= myFactories[entityId].unitCount 
-    return attacked, onWay
-
 '''
 *******************
 Main program
@@ -431,6 +568,6 @@ while True:
         print(fact, file=sys.stderr)
 
     print("-- simulation --", file=sys.stderr)
-    simulate()
+    #simulate()
     
-    print(game.mercyLess(nuclearDetected))
+    print(game.desertStorm(nuclearDetected))
