@@ -4,7 +4,6 @@ import sys
 GLOBAL VARS
 """
 from copy import deepcopy
-from ctypes._endian import _OTHER_ENDIAN
 
 #global Map is a map of map of distance
 # ie [] globalMap[factory_id1][factory_id2] = distance
@@ -140,9 +139,7 @@ def needReinforcement(entityId):
 **********************
 SIMU
 **********************
-"""
 
-"""
 Simulation @ end
 """
 def simulate():
@@ -257,6 +254,64 @@ def ToProtectFactory(factory):
     print("we should not ge here", file=sys.stderr)
     return (eta, 0)
 
+def ToEvolve(factory):
+
+    if factory.unitCount < 10:
+        return 
+    if factory.disabled:
+        return 
+
+    allTroops = {**myTroops, **theirTroops }
+    allTroopsOnWay = sorted([troop for (_, troop) in allTroops.items() if troop.target == factory.entityId], key=lambda x: x.eta)
+        
+    eta = 0    
+    print("ToEvolveFactory: ", factory.entityId, file=sys.stderr)
+    troopsOnFactory = factory.unitCount - 10 
+    for troop in allTroopsOnWay:
+        localEta = troop.eta - eta   
+        troopsOnFactory += (localEta  * factory.production)                    
+        print("> troops on factory at T: ", troopsOnFactory, file=sys.stderr)
+        if troop.owner == 1: # accumulates
+            troopsOnFactory += troop.unitCount
+        else: # fight
+            if troopsOnFactory - troop.unitCount <= 0: # at this time, we loose factory
+                return False
+            else:
+                troopsOnFactory -= troop.unitCount
+        eta = troop.eta
+    return True
+
+def ToAttack(factory, target):
+    
+    if factory.disabled:
+        return -1
+        
+    allTroops = {**myTroops, **theirTroops }
+    allTroopsOnWay = sorted([troop for (_, troop) in allTroops.items() if troop.target == factory.entityId], key=lambda x: x.eta)
+
+    to_target_eta = globalMap[factory.entityId][target]
+    max_eta = to_target_eta
+            
+    targetFactory = theirFactories[target]
+    if not targetFactory.isNeutral:
+        sure_to_get_the_base_at_t0 = to_target_eta * targetFactory.production  + targetFactory.unitCount + 1 - min(targetFactory.disabled, max_eta) * targetFactory.production
+    else:
+        sure_to_get_the_base_at_t0 = targetFactory.unitCount + 1
+     
+    print("factory % to attack %d= ", (factory.entityId, target), file=sys.stderr)
+    print("max eta= ", max_eta, file=sys.stderr)
+    for troop in allTroopsOnWay:
+        
+        if troop.eta >= max_eta:
+            return sure_to_get_the_base_at_t0
+                
+        if troop.owner == 1: # accumulates
+            sure_to_get_the_base_at_t0 -= troop.unitCount # troops already on way
+            print("update: sure_to_get_the_base_at_t0= ", sure_to_get_the_base_at_t0, file=sys.stderr)
+        else: # fight
+            sure_to_get_the_base_at_t0 += troop.unitCount        
+    
+    return sure_to_get_the_base_at_t0    
 
 class Game:
     
@@ -270,7 +325,13 @@ class Game:
         self.onRisk = sorted([factory for (_, factory) in self.simulation.items() if factory in self.ourBases and factory.owner == -1], key=lambda x : x.unitCount) # means we loose it        
         self.isInRisk = True if len(self.onRisk) > 0 else False         
         self.toProtect = { factory.entityId : ToProtectFactory(myFactories[factory.entityId]) for factory in self.onRisk }
-                
+        
+    def rateOfInterest(self, fid, eta):
+        factory = myFactories[fid] if fid in myFactories else theirFactories[fid]
+        #if factory.isNeutral:
+        return -eta
+        #else:
+        #return -((fact.production * eta) + factory.unitCount - (fact.disabled * eta))            
         
     def findProtection(self):
         
@@ -282,21 +343,37 @@ class Game:
                 factoryId = neighbour[0]
                 tosend = min(needed_xi, myFactories[factoryId].unitCount)
                 res += ("; MOVE %d %d %d" % (factoryId, protectId, max(0, tosend)))
+                print("findProtection=> MOVE %d %d %d" % (factoryId, protectId, max(0, tosend)), file=sys.stderr)
                 needed_xi -= tosend
                 myFactories[factoryId].unitCount -= tosend
                 if needed_xi == 0:
                     break
         return res  
             
-            
+    def evolve(self, commands):
+        print(self.toProtect, file=sys.stderr)
+        for k, base in myFactories.items():   
+            print("k:", k, file=sys.stderr)         
+            if k not in self.toProtect.keys():
+                if ToEvolve(base):
+                    print("evolve: ", k, file=sys.stderr)
+                    commands += "; INC %d" % k
+                    
     
     def desertStorm(self):
+        
+        simu = set()
+        
+        # mutual protection first
+        print("inRisk= ", self.isInRisk, file=sys.stderr)
+        if self.isInRisk:
+            self.commands += self.findProtection()            
         
         targets = [entityId for (entityId,_) in myFactories.items()]
         while targets:
             current = targets[0]
             
-            # avoid neighbours
+            # avoid neighbors
             if current not in myFactories:
                 continue
                                 
@@ -305,72 +382,46 @@ class Game:
             targets = targets[1:]
 
             
-            # mutual protction first
-            if self.isInRisk:
-                self.commands += self.findProtection()
+
             
             #if evolveFactory(myFactories[current], commands):
             #    continue
+            if current in self.toProtect.keys():
+                print("protection, ignoring ", current, file=sys.stderr)
                         
-            neighbours = sorted(graphset[current], key=lambda x : x[1])   # tuples of (factory_id, distance) sorted by rate          
+            neighbours = sorted(graphset[current], key=lambda x : self.rateOfInterest(x[0], x[1]), reverse=True)  # tuples of (factory_id, distance) sorted by rate
+            print("neighbours: ", neighbours, file=sys.stderr)          
             for neib in neighbours:
                 
                 # id of target
                 neibId = neib[0]
-                print("considering ", neibId, file=sys.stderr)            
-                
-                # compute how many to send
-                isUnderAttack, mynb = needReinforcement(current)
-                toSend= 0
+                print("considering ", neibId, file=sys.stderr)                            
                 if neibId in myFactories:
-                    pass
-                    #attacked, nb = needReinforcement(neibId)
-                    #if attacked:
-                        #print("nb! ", nb, file=sys.stderr)
-                    #    if nb >= 0: # means is attacked
-                            #print("base ",  neibId, " attacked by ", nb, " cyborgs" , file=sys.stderr)
-                    #        toSend = nb + 1 
-                    #        myFactories[current].unitCount -= max(max(0, toSend), myFactories[current].unitCount) # decreate pop
-                    #        myFactories[neibId].unitCount += max(max(0, toSend), myFactories[current].unitCount) # increase dest pop
-                    #else:#
-                    #if isUnderAttack < -13:
-                    #    print("here:" , file=sys.stderr)
-                    #    toSend = -(mynb + 13);
-                    #    myFactories[current].unitCount -= max(max(0, toSend), myFactories[current].unitCount) # decreate pop                  
+                    pass               
                 else:
-                    #if isUnderAttack:
-                        #print("isUnderAttack: ignoring %d" % current, file=sys.stderr);
-                    #    continue ;
-                                    
-                    fac = theirFactories[neibId]                    
-                    #if fac.production == 0:
-                    #    continue                 
+                    # already target:
+                    if neibId in simu:
+                        continue
+                               
+                    target = theirFactories[neibId]
+                    src = myFactories[current]                            
+                    prepareCommando = ToAttack(src, neibId)                                
                     
-                    toSend = fac.unitCount + 1
-                    #print("toSent1: ", toSend, file=sys.stderr)
-                    if not fac.isNeutral:
-                        toSend = 0
-                        #+= (neib[1] * fac.production)
-                    else:
-                        toSend -= OnTheWay(neibId) 
-                        #print("toSent2: ", toSend, file=sys.stderr)
-                    toSend = max(toSend, 0)
-
-                    # do not sent anything if not
-                    #if toSend > myFactories[current].unitCount:
-                        #print("continue because not enough= ", myFactories[current], file=sys.stderr)
-                    bombNearestBig(self.commands)
-                    #    continue 
-
+                    print("src pop= ", src.unitCount, file=sys.stderr)
+                    print("prepareCommando: ", prepareCommando, file=sys.stderr)
+                          
+                    if prepareCommando > 0 and src.unitCount >= prepareCommando: # forbid mutual attack !!! think about it
+                        tosend = min(src.unitCount, prepareCommando) # decrease pop
+                        src.unitCount -= tosend
+                        if tosend > 0: 
+                            print("tosend: ", tosend, file=sys.stderr)
+                            self.commands += "; MOVE %d %d %d" % (current, neibId, tosend)
+                        #simu.add(neibId)
+                
                     
-                myFactories[current].unitCount -= min(max(0, toSend), myFactories[current].unitCount) # decreate pop
-                    
-                #print("MOVE %d %d %d" % (current, neibId, toSend), file=sys.stderr)
-                # add command    
-                self.commands += "; MOVE %d %d %d" % (current, neibId, max(0, toSend))
-
-                evolve(self.commands)
-
+        bombNearestBig(self.commands)
+        self.evolve(self.commands)
+        self.commands += "; MSG (╯°□°）╯︵ ┻━┻"
         
         return "".join(self.commands)
      
@@ -444,14 +495,6 @@ def evolveFactory(factory, commands):
     return False
 
     
-def evolve(commands):
-    for k, base in myFactories.items():
-        if base.unitCount > 10:
-            #attacked, nb = needReinforcement(base.entityId)
-            #if not attacked or (attacked and nb <= -10):
-            commands += "; INC %d" % k
-            #print("INC %d" % k, file=sys.stderr)
-            
 '''
 *******************
 Main program
