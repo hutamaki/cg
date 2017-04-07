@@ -246,7 +246,7 @@ def ToProtectFactory(factory):
         if troop.owner == 1: # accumulates
             troopsOnFactory += troop.unitCount
         else: # fight
-            if troopsOnFactory - troop.unitCount <= 0: # at this time, we loose factory
+            if troopsOnFactory - troop.unitCount < 0: # at this time, we loose factory
                 return (troop.eta, (troop.unitCount - troopsOnFactory) + 1)
             else:
                 troopsOnFactory -= troop.unitCount
@@ -274,7 +274,7 @@ def ToEvolve(factory):
         if troop.owner == 1: # accumulates
             troopsOnFactory += troop.unitCount
         else: # fight
-            if troopsOnFactory - troop.unitCount <= 0: # at this time, we loose factory
+            if troopsOnFactory - troop.unitCount < 0: # at this time, we loose factory
                 return False
             else:
                 troopsOnFactory -= troop.unitCount
@@ -351,7 +351,6 @@ class Game:
         return res  
             
     def evolve(self, commands):
-        print(self.toProtect, file=sys.stderr)
         for k, base in myFactories.items():   
             print("k:", k, file=sys.stderr)         
             if k not in self.toProtect.keys():
@@ -359,63 +358,142 @@ class Game:
                     print("evolve: ", k, file=sys.stderr)
                     commands += "; INC %d" % k
                     
+    def availableResources(self, myBasesId):   
     
-    def desertStorm(self):
+        allTroops = {**myTroops, **theirTroops}
+        availableResourcesById =  dict()
         
-        simu = set()
+        for myBaseId in myBasesId:                
+            allTroopsOnWay = sorted([troop for (_, troop) in allTroops.items() if troop.target == myBaseId], key=lambda x: x.eta)
+            
+            myBase = myFactories[myBaseId]
+            localMinimums = []
+            eta = 0    
+            print("compute>availableResources> for ", myBaseId, file=sys.stderr)
+            troopsOnFactory = myBase.unitCount
+            factoryDisabled = myBase.disabled
+            print("compute>availableResources>", myBaseId , "> ", troopsOnFactory, file=sys.stderr)
+            
+            if len(allTroopsOnWay) == 0:
+                localMinimums.append(troopsOnFactory)
+        
+            for troop in allTroopsOnWay:
+                print("compute>availableResources>", myBaseId , ">on way> ", troop, file=sys.stderr)
+                localEta = troop.eta - eta   
+                if localEta - factoryDisabled < 0:
+                    factoryDisabled -= localEta
+                else:
+                    troopsOnFactory += (localEta - factoryDisabled)  * myBase.production
+                    factoryDisabled = 0
+                print("compute>availableResources>", myBaseId , "> troops @ T: ", troopsOnFactory, file=sys.stderr)
+        
+                if troop.owner == 1: # accumulates
+                    troopsOnFactory += troop.unitCount
+                    localMinimums.append(troopsOnFactory)
+                else: # fight
+                    if troopsOnFactory - troop.unitCount < 0: # at this time, we loose factory
+                        localMinimums.append(0)
+                        break 
+                    else:
+                        troopsOnFactory -= troop.unitCount
+                        localMinimums.append(troopsOnFactory)            
+                eta = troop.eta
+            availableResourcesById[myBaseId] = min(localMinimums)         
+        return availableResourcesById
+    
+       
+    def computePrenablesAtRate(self, targetsByRate):
+        
+        allTroops = {**myTroops, **theirTroops} 
+        prenableAtRate = dict()     
+        
+        for targetId in targetsByRate:
+
+            allTroopsOnWay = sorted([troop for (_, troop) in allTroops.items() if troop.target == targetId], key=lambda x: x.eta)
+            
+            tBase = theirFactories[targetId]
+            eta = 0    
+            print("compute>computePrenablesAtRate> for ", targetId, file=sys.stderr)
+            troopsOnFactory = tBase.unitCount
+            factoryDisabled = tBase.disabled
+            print("compute>computePrenablesAtRate>", targetId , "> ", troopsOnFactory, file=sys.stderr)
+            
+            minimum = troopsOnFactory + 1
+        
+            for troop in allTroopsOnWay:
+                print("compute>computePrenablesAtRate>", targetId , ">on way> ", troop, file=sys.stderr)
+                localEta = troop.eta - eta   
+                if localEta - factoryDisabled < 0:
+                    factoryDisabled -= localEta
+                else:
+                    troopsOnFactory += 0 if tBase.isNeutral else (localEta - factoryDisabled)  * tBase.production
+                    factoryDisabled = 0
+                print("compute>computePrenablesAtRate>", targetId , "> troops @ T: ", troopsOnFactory, file=sys.stderr)
+        
+                if troop.owner == -1: # accumulates
+                    troopsOnFactory += troop.unitCount
+                    minimum += troop.unitCount
+                else: # fight
+                    minimum -= troop.unitCount
+                    troopsOnFactory -= troop.unitCount
+                    if troopsOnFactory < 0: # at this time, we loose factory
+                        prenableAtRate[targetId] = minimum 
+                        break                     
+                                                    
+                eta = troop.eta
+            prenableAtRate[targetId] = minimum  
+        return prenableAtRate
+       
+    def ratingTheirFactory(self, factoryId):  #### seems not good
+        tf = theirFactories[factoryId]
+        return 2 * tf.production - tf.unitCount        
+        
+    def desertStorm(self):        
         
         # mutual protection first
         print("inRisk= ", self.isInRisk, file=sys.stderr)
         if self.isInRisk:
             self.commands += self.findProtection()            
         
-        targets = [entityId for (entityId,_) in myFactories.items()]
-        while targets:
-            current = targets[0]
+        myBases = [entityId for (entityId,_) in myFactories.items() if entityId not in self.toProtect.keys()]
+        targetsByRate = [entityId for (entityId,_) in theirFactories.items()]       
+        
+        soldiersAvailableByBase = self.availableResources(myBases) 
+        print("soldiersAvailableByBase> ", soldiersAvailableByBase, file=sys.stderr)
+        
+        prenableAtRate = self.computePrenablesAtRate(targetsByRate)
+        targets = sorted(targetsByRate, key=lambda x : self.ratingTheirFactory(x))  # tuples of        
+        print("whatToTake> ", prenableAtRate, file=sys.stderr)
+        print("orderOfRating> ", targets, file=sys.stderr)
+        
+        for myBaseId in myBases:
             
-            # avoid neighbors
-            if current not in myFactories:
-                continue
+            print("current> ", myBaseId, file=sys.stderr)
+            
+            if myFactories[myBaseId].unitCount == 0:
+                continue                     
+            
+            # could be optimized if needed
+            neighbours = sorted(graphset[myBaseId], key=lambda x : self.rateOfInterest(x[0], x[1]), reverse=True)  # tuples of (factory_id, distance) sorted by rate
+            ennemyTargets = [ x for x in neighbours if x[0] in targetsByRate]                                    
+            print("ennemyTargets: ", ennemyTargets, file=sys.stderr)
+            for ennemyBase in ennemyTargets:
                                 
-            
-            print("current> ", current, file=sys.stderr)            
-            targets = targets[1:]
-
-            
-
-            
-            #if evolveFactory(myFactories[current], commands):
-            #    continue
-            if current in self.toProtect.keys():
-                print("protection, ignoring ", current, file=sys.stderr)
-                        
-            neighbours = sorted(graphset[current], key=lambda x : self.rateOfInterest(x[0], x[1]), reverse=True)  # tuples of (factory_id, distance) sorted by rate
-            print("neighbours: ", neighbours, file=sys.stderr)          
-            for neib in neighbours:
-                
-                # id of target
-                neibId = neib[0]
-                print("considering ", neibId, file=sys.stderr)                            
-                if neibId in myFactories:
-                    pass               
-                else:
-                    # already target:
-                    if neibId in simu:
-                        continue
-                               
-                    target = theirFactories[neibId]
-                    src = myFactories[current]                            
-                    prepareCommando = ToAttack(src, neibId)                                
+                ennemyBaseId = ennemyBase[0]
+                print("target>> ", ennemyBaseId, file=sys.stderr)
+                                                                            
+                src = myFactories[myBaseId]                            
+                prepareCommando = ToAttack(src, ennemyBaseId)                                
                     
-                    print("src pop= ", src.unitCount, file=sys.stderr)
-                    print("prepareCommando: ", prepareCommando, file=sys.stderr)
+                print("src pop= ", src.unitCount, file=sys.stderr)
+                print("prepareCommando: ", prepareCommando, file=sys.stderr)
                           
-                    if prepareCommando > 0 and src.unitCount >= prepareCommando: # forbid mutual attack !!! think about it
-                        tosend = min(src.unitCount, prepareCommando) # decrease pop
-                        src.unitCount -= tosend
-                        if tosend > 0: 
-                            print("tosend: ", tosend, file=sys.stderr)
-                            self.commands += "; MOVE %d %d %d" % (current, neibId, tosend)
+                if prepareCommando > 0 and src.unitCount >= prepareCommando: # forbid mutual attack !!! think about it
+                    tosend = min(src.unitCount, prepareCommando) # decrease pop
+                    src.unitCount -= tosend
+                    if tosend > 0: 
+                        print("tosend: ", tosend, file=sys.stderr)
+                        self.commands += "; MOVE %d %d %d" % (myBaseId, ennemyBaseId, tosend)
                         #simu.add(neibId)
                 
                     
