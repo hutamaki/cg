@@ -315,8 +315,6 @@ def ToAttack(factory, target):
 
 class Game:
     
-    # strategy attack nearest base !!!!!!!!!!!!!!!!!!
-    # however, defense computation for first iteration is good
     def init(self):
         self.simulation = simulate()
         self.commands = ["WAIT"]
@@ -409,7 +407,7 @@ class Game:
         
         for targetId in targetsByRate:
 
-            allTroopsOnWay = sorted([troop for (_, troop) in allTroops.items() if troop.target == targetId], key=lambda x: x.eta)
+            allTroopsOnWay = sorted([troop for (_, troop) in allTroops.items() if troop.target == targetId], key=lambda x: x.eta, reverse=True)
             
             tBase = theirFactories[targetId]
             eta = 0    
@@ -444,10 +442,14 @@ class Game:
             prenableAtRate[targetId] = minimum  
         return prenableAtRate
        
-    def ratingTheirFactory(self, factoryId):  #### seems not good
-        tf = theirFactories[factoryId]
-        return 2 * tf.production - tf.unitCount        
-        
+#     def ratingTheirFactory(self, factoryId):  #### seems not good
+#         tf = theirFactories[factoryId]
+#         #if tf.isNeutral or tf.disabled > 0:
+#         #    return tf.unitCount
+#         rating = 100 * tf.production - tf.unitCount
+#         print("rating for ", tf.entityId, "= ", rating, file=sys.stderr)
+#         return rating 
+#         
     def desertStorm(self):        
         
         # mutual protection first
@@ -462,9 +464,8 @@ class Game:
         print("soldiersAvailableByBase> ", soldiersAvailableByBase, file=sys.stderr)
         
         prenableAtRate = self.computePrenablesAtRate(targetsByRate)
-        targets = sorted(targetsByRate, key=lambda x : self.ratingTheirFactory(x))  # tuples of        
         print("whatToTake> ", prenableAtRate, file=sys.stderr)
-        print("orderOfRating> ", targets, file=sys.stderr)
+        print("orderOfRating-> ", targets, file=sys.stderr)
         
         for myBaseId in myBases:
             
@@ -472,9 +473,7 @@ class Game:
             
             if myFactories[myBaseId].unitCount == 0:
                 continue                     
-            
-            # could be optimized if needed
-            neighbours = sorted(graphset[myBaseId], key=lambda x : self.rateOfInterest(x[0], x[1]), reverse=True)  # tuples of (factory_id, distance) sorted by rate
+        
             ennemyTargets = [ x for x in neighbours if x[0] in targetsByRate]                                    
             print("ennemyTargets: ", ennemyTargets, file=sys.stderr)
             for ennemyBase in ennemyTargets:
