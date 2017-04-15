@@ -19,6 +19,7 @@ myships = []
 barrels = []
 cannonballs = []
 mines = []
+target = {}
 
 class Unit(object):
 
@@ -86,8 +87,12 @@ def distance(ship, barrel):
 
 
 def getNearest(ship):
-    result = sorted(barrels, key=lambda x: distance(ship, x), reverse=True)
-    return result[0]
+    print("computing ...", file=sys.stderr)
+    if len(barrels) <= 0:
+        return False, None
+    result = sorted(barrels, key=lambda x: distance(ship, x))
+    barrel = result[0]
+    return (True, Unit(-1, barrel.x, barrel.y))
 
 
 while True:
@@ -112,7 +117,8 @@ while True:
         if entity_type == "SHIP":
             ship = Ship(entity_id, x, y, arg_1, arg_2, arg_3, arg_4)
             ships.append(ship)
-            myships.append(ship)
+            if ship.owner == 1:
+                myships.append(ship)
             print(ship, file=sys.stderr)
         elif entity_type == "BARREL":
             barrel = Barrel(entity_id, x, y, arg_1)
@@ -128,5 +134,21 @@ while True:
             print(mine, file=sys.stderr)
 
     for ship in myships:
-        nearest = getNearest(ship)
-        print("MOVE %d %d" % (nearest.x, nearest.y))
+        if ship.id not in target.keys():
+            (isMove, unit) = getNearest(ship)
+            if isMove:
+                target[ship.id] = unit
+            else:
+                print("WAIT")
+                continue
+        unit = target.get(ship.id)
+        print("unit: %s" % unit, file=sys.stderr)
+        if ship.x == unit.x and ship.y == unit.y:
+            (isMove, unit) = getNearest(ship)
+            if isMove:
+                target[ship.id] = unit
+                print("MOVE %d %d" % (unit.x, unit.y))
+            else:
+                print("WAIT")
+        else:
+            print("MOVE %d %d" % (unit.x, unit.y))
