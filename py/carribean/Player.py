@@ -70,7 +70,7 @@ class Mine(Unit):
     def __init__(self, id, x, y):
         super(Mine, self).__init__(id, x, y)
 
-    def __str(self):
+    def __str__(self):
         return "mine: %s" % super(Mine, self).__str__()
 
 
@@ -94,6 +94,22 @@ def getNearest(ship):
     barrel = result[0]
     return (True, Unit(-1, barrel.x, barrel.y))
 
+check_for_mines = { 0: Unit(-1, 2, 0),
+                    1: Unit(-1, +1, -2),
+                    2: Unit(-1, -1, -2),
+                    3: Unit(-1, -2, 0),
+                    4: Unit(-1, -1, +2),
+                    5: Unit(-1, +1, +2)}
+
+def nextMoveButMines(ship, target):
+    unit = check_for_mines.get(ship.orientation)
+    total_pox = Unit(-1, ship.x + unit.x, ship.y + unit.y)
+    for mine in mines:
+        if mine.x == total_pox.x and mine.y == total_pox.y:
+            print("OOOOOOOOOONNNNNNNNNNOOOOOOOOOZZZZZZZZZ")
+
+
+
 
 while True:
     my_ship_count = int(input())
@@ -114,6 +130,7 @@ while True:
         arg_3 = int(arg_3)
         arg_4 = int(arg_4)
 
+        print("entityType= %s", entity_type, file=sys.stderr)
         if entity_type == "SHIP":
             ship = Ship(entity_id, x, y, arg_1, arg_2, arg_3, arg_4)
             ships.append(ship)
@@ -147,8 +164,10 @@ while True:
             (isMove, unit) = getNearest(ship)
             if isMove:
                 target[ship.id] = unit
+                nextMoveButMines(ship, unit)
                 print("MOVE %d %d" % (unit.x, unit.y))
             else:
                 print("WAIT")
         else:
+            nextMoveButMines(ship, unit)
             print("MOVE %d %d" % (unit.x, unit.y))
